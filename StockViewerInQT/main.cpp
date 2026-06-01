@@ -11,57 +11,65 @@
 #include <QTextStream>
 #include <QFile>
 
-QStringList loadSP500FromCSV(const QString &filePath)
+static QList<QPair<QString,QString>> loadSymbolsFromCSV(const QString &filePath)
 {
-    QStringList symbols;
     QFile file(filePath);
-    return {"aapl", "msft", "nvda", "googl", "tsla"};
     if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        qWarning() << "Could not open CSV:" << filePath;
-        // Fallback symbols
-        return {"aapl", "msft", "nvda", "googl", "tsla"};
+        qWarning() << "Could not open CSV:" << filePath << "— using fallback symbols";
+        return {
+                {"AAPL",  "Apple Inc."},
+                {"MSFT",  "Microsoft Corporation"},
+                {"NVDA",  "NVIDIA Corporation"},
+                {"GOOGL", "Alphabet Inc."},
+                {"TSLA",  "Tesla Inc."},
+                {"AMZN",  "Amazon.com Inc."},
+                {"META",  "Meta Platforms Inc."},
+                {"JPM",   "JPMorgan Chase & Co."},
+                };
     }
 
+    QList<QPair<QString,QString>> result;
     QTextStream in(&file);
-    QString line = in.readLine(); // skip header
+    in.readLine(); // skip header row
 
     while (!in.atEnd()) {
-        line = in.readLine().trimmed();
+        const QString line = in.readLine().trimmed();
         if (line.isEmpty()) continue;
 
-        QStringList parts = line.split(',', Qt::SkipEmptyParts);
-        if (!parts.isEmpty()) {
-            QString symbol = parts.first().trimmed().toLower();
-            if (!symbol.isEmpty() && !symbol.contains(".")) {  // clean symbol
-                symbols << symbol;
-            }
-        }
+        const QStringList parts = line.split(',', Qt::SkipEmptyParts);
+        if (parts.size() < 2) continue;
+
+        const QString symbol = parts[0].trimmed().toUpper();
+        const QString name   = parts[1].trimmed();
+
+        if (!symbol.isEmpty() && !symbol.contains('.'))
+            result.append({ symbol, name });
     }
 
-    qDebug() << "Loaded" << symbols.size() << "symbols from CSV";
-    return symbols;
+    qDebug() << "Loaded" << result.size() << "symbols from CSV";
+    return result;
 }
 
 int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
 
-    qDebug() << "App started";
-
-    StockModel model;
-
-    QQmlApplicationEngine engine;
-
+    // --- Models ---
+    StockModel       browseModel;
+    WatchlistModel   watchlist;
     StockHistoryStore historyStore;
     StockHistoryModel historyModel(&historyStore);
 
-    StockFetcher* fetcher = new StockFetcher(&model, &historyStore, &app);
+    // --- Fetcher (only knows about the watchlist) ---
+    StockFetcher fetcher(&watchlist, &historyStore, &app);
 
-    engine.rootContext()->setContextProperty("historyModel", &historyModel);
-    engine.rootContext()->setContextProperty("historyStore", &historyStore);
-
-    engine.rootContext()->setContextProperty("stockModel", &model);
-    engine.rootContext()->setContextProperty("stockFetcher", fetcher);
+    // --- Expose to QML ---
+    QQmlApplicationEngine engine;
+    engine.rootContext()->setContextProperty("browseModel",   &browseModel);
+    engine.rootContext()->setContextProperty("watchlist",     &watchlist);
+    engine.rootContext()->setContextProperty("historyModel",  &historyModel);
+    engine.rootContext()->setContextProperty("historyStore",  &historyStore);
+    engine.rootContext()->setContextProperty("stockFetcher",  &fetcher);
 
     engine.loadFromModule("StockViewerInQT", "Main");
 
@@ -70,11 +78,12 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    qDebug() << "QML loaded OK";
+    // --- Load symbol list ---
+    auto symbols = loadSymbolsFromCSV(":/csv/sp500.csv");
+    browseModel.setSymbols(symbols);
 
-    QStringList allSymbols = loadSP500FromCSV(":/csv/sp500.csv");
-
-    fetcher->startBatched(allSymbols, 100, 5000);
+    // --- Start price refresh timer (30s) ---
+    fetcher.start(30000);
 
     return app.exec();
 }

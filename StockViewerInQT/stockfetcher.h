@@ -8,46 +8,41 @@
 #include <StockHistoryStore.h>
 #include "StockModel.h"
 #include "stockprovider.h"
+#include "watchlistmodel.h"
 
 class StockFetcher : public QObject
 {
     Q_OBJECT
 public:
 
-    explicit StockFetcher(StockModel *model, StockHistoryStore *historyStore = nullptr, QObject *parent = nullptr);
+    explicit StockFetcher(WatchlistModel *watchlist, StockHistoryStore *historyStore, QObject *parent = nullptr);
 
-
-    void start(const QStringList &symbols, int intervalMs = 5000);
+    // Start periodic refresh of watchlist prices (default: every 30s)
+    void start(int intervalMs = 30000);
     void stop();
 
     void fetch(const QStringList &symbols);
-
-    void finishPendingReply();
-    void startBatched(const QStringList &allSymbols, int batchSize = 100, int intervalMs = 5000);
-
-    void fetchNextBatch();
-
-    QString buildUrl(const QString &symbol) const;
-    Stock parseReply(const QString &symbol, const QJsonDocument &doc) const;
-
-
     void setProvider(bool useYahoo);
 
     Q_INVOKABLE void setProvider(int index);
-
     Q_INVOKABLE void fetchHistory(const QString &symbol);
+
+    // Fetch prices for all current watchlist symbols right now
+    Q_INVOKABLE void refreshNow();
+
 signals:
     void providerChanged();
 
 private slots:
-    // void onReplyFinished();
-
 
 private:
+
+    void fetchPrice(const QString &symbol);
+
     QNetworkAccessManager m_manager;
     StockModel *m_model;
 
-    QTimer m_timer;
+
     QStringList m_symbols;
 
     QList<Stock> m_cache;
@@ -58,6 +53,9 @@ private:
     int m_currentIndex = 0;
 
     std::unique_ptr<IStockProvider> m_provider;
+
+    QTimer m_timer;
+    WatchlistModel       *m_watchlist;
     StockHistoryStore *m_historyStore;
 };
 

@@ -18,6 +18,7 @@ Stock StooqProvider::parse(const QString &symbol,
     s.symbol = symbol.toUpper();
     s.name = s.symbol;
     s.price = 0.0;
+    s.prevClose = 0.0;
 
     QJsonDocument doc = QJsonDocument::fromJson(data);
 
@@ -40,6 +41,13 @@ Stock StooqProvider::parse(const QString &symbol,
         s.price = closeValue.toDouble();
     else
         s.price = closeValue.toString().toDouble();
+
+    // Previous close
+    auto prevCloseValue = obj["previousClose"];   // Stooq field
+    if (prevCloseValue.isDouble())
+        s.prevClose = prevCloseValue.toDouble();
+    else if (!prevCloseValue.toString().isEmpty())
+        s.prevClose = prevCloseValue.toString().toDouble();
 
     qDebug() << "[StooqProvider] parse() called for:" << symbol;
     qDebug() << "[StooqProvider] raw size:" << data.size();
@@ -92,6 +100,7 @@ Stock YahooProvider::parse(const QString &symbol,
     s.symbol = symbol.toUpper();
     s.name = s.symbol;
     s.price = 0.0;
+    s.prevClose = 0.0;
 
     QJsonParseError err;
     QJsonDocument doc = QJsonDocument::fromJson(data, &err);
@@ -100,9 +109,7 @@ Stock YahooProvider::parse(const QString &symbol,
         return s;
 
     QJsonObject root = doc.object();
-
     QJsonObject chart = root["chart"].toObject();
-
     QJsonArray results = chart["result"].toArray();
 
     if (results.isEmpty())
@@ -124,6 +131,10 @@ Stock YahooProvider::parse(const QString &symbol,
     // current market price
     if (meta["regularMarketPrice"].isDouble())
         s.price = meta["regularMarketPrice"].toDouble();
+
+    // Previous close - Yahoo has this field
+    if (meta["previousClose"].isDouble())
+        s.prevClose = meta["previousClose"].toDouble();
 
     qDebug() << "[YahooProvider] parse() called for:" << symbol;
     qDebug() << "[YahooProvider] raw size:" << data.size();

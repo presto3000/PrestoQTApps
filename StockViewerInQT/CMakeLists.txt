@@ -10,6 +10,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Network
     Charts
     Qml
+    QuickControls2
 )
 
 qt_standard_project_setup()
@@ -29,6 +30,7 @@ qt_add_qml_module(appStockViewerInQT
         SOURCES stockprovider.h stockprovider.cpp
         SOURCES stockhistorystore.h stockhistorystore.cpp
         SOURCES stockhistorymodel.h stockhistorymodel.cpp
+        SOURCES watchlistmodel.h watchlistmodel.cpp
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.
