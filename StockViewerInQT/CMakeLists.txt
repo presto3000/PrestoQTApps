@@ -31,6 +31,9 @@ qt_add_qml_module(appStockViewerInQT
         SOURCES stockhistorystore.h stockhistorystore.cpp
         SOURCES stockhistorymodel.h stockhistorymodel.cpp
         SOURCES watchlistmodel.h watchlistmodel.cpp
+        SOURCES signalengine.h signalengine.cpp
+        SOURCES alertmodel.h alertmodel.cpp
+        SOURCES logger.h logger.cpp
 )
 
 # Qt for iOS sets MACOSX_BUNDLE_GUI_IDENTIFIER automatically since Qt 6.1.

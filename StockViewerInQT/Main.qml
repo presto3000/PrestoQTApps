@@ -5,44 +5,380 @@ import QtCharts
 
 ApplicationWindow {
     visible: true
-    width: 1100
-    height: 700
+    width: 1200
+    height: 750
     title: "S&P 500 Stock Viewer"
 
-    minimumWidth: 1100
-    maximumWidth: 1100
-    minimumHeight: 700
-    maximumHeight: 700
+    minimumWidth: 1200
+    maximumWidth: 1200
+    minimumHeight: 750
+    maximumHeight: 750
 
-    // ── THEME ────────────────────────────────────────────────────────────────
-    readonly property color bg:       "#000000"
-    readonly property color panel:    "#0a0a0a"
-    readonly property color panelAlt: "#0d0d0d"
+    // -- THEME ----------------------------------------------------------------
+    readonly property color bg:        "#000000"
+    readonly property color panel:     "#0a0a0a"
+    readonly property color panelAlt:  "#0d0d0d"
     readonly property color borderCol: "#1a1a1a"
-    readonly property color cyan:     "#00ffff"
-    readonly property color cyanDim:  "#00cccc"
-    readonly property color cyanFade: "#003333"
-    readonly property color hover:    "#001a1a"
-    readonly property color red:      "#ff4444"
-    readonly property color green:    "#00ff88"
+    readonly property color cyan:      "#00ffff"
+    readonly property color cyanDim:   "#00cccc"
+    readonly property color cyanFade:  "#003333"
+    readonly property color hoverCol:  "#001a1a"
+    readonly property color redCol:    "#ff4444"
+    readonly property color greenCol:  "#00ff88"
+    readonly property color orange:    "#ffaa00"
 
     color: bg
 
-    // === ROOT LAYOUT ====================================================================
+    // -- ALERT DETAIL POPUP ---------------------------------------------------
+    Popup {
+        id: alertPopup
+        x: (parent.width  - width)  / 2
+        y: (parent.height - height) / 2
+        width: 440
+        modal: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        padding: 0
+
+        property string alertSymbol: ""
+        property string alertName: ""
+        property string alertType: ""
+        property string alertDesc: ""
+        property string alertTime: ""
+        property double alertValue: 0
+
+        background: Rectangle {
+            color: "#0d0d0d"
+            border.color: alertPopup.alertType === "bullish" ? greenCol
+                        : alertPopup.alertType === "bearish" ? redCol : orange
+            border.width: 1
+            radius: 4
+        }
+
+        ColumnLayout {
+            width: alertPopup.width
+            spacing: 12
+            anchors.margins: 20
+            anchors.fill: parent
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 10
+
+                Rectangle {
+                    width: typeLabel.implicitWidth + 16; height: 22; radius: 3
+                    color: alertPopup.alertType === "bullish" ? "#003322"
+                         : alertPopup.alertType === "bearish" ? "#330011" : "#2a1f00"
+                    Text {
+                        id: typeLabel
+                        anchors.centerIn: parent
+                        text: alertPopup.alertType.toUpperCase()
+                        color: alertPopup.alertType === "bullish" ? greenCol
+                             : alertPopup.alertType === "bearish" ? redCol : orange
+                        font.pixelSize: 10; font.letterSpacing: 2; font.bold: true
+                    }
+                }
+
+                Text {
+                    text: alertPopup.alertSymbol
+                    color: cyan; font.pixelSize: 18; font.bold: true; leftPadding: 8
+                }
+                Item { Layout.fillWidth: true }
+                Text {
+                    text: "×"; color: "#666"; font.pixelSize: 20
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: alertPopup.close()
+                    }
+                }
+            }
+
+            Text {
+                text: alertPopup.alertName
+                color: cyan; font.pixelSize: 14; font.bold: true
+            }
+
+            Rectangle { Layout.fillWidth: true; height: 1; color: borderCol }
+
+            Text {
+                Layout.fillWidth: true
+                text: alertPopup.alertDesc
+                color: "#aaa"; font.pixelSize: 12
+                wrapMode: Text.WordWrap; lineHeight: 1.5
+            }
+
+            Text {
+                text: "Detected: " + alertPopup.alertTime
+                color: "#444"; font.pixelSize: 10
+            }
+        }
+    }
+
+
+    // -- DEBUG PANEL (F12) ----------------------------------------------------
+    Shortcut {
+        sequence: "F1"
+        context: Qt.ApplicationShortcut
+        onActivated: {
+            if (debugPopup.visible)
+            {
+                debugPopup.close()
+            }
+            else
+            {
+                debugPopup.open()
+            }
+        }
+    }
+
+    Popup {
+        id: debugPopup
+        parent: Overlay.overlay          // Better for modal behavior
+        anchors.centerIn: parent
+        width: parent.width * 0.82
+        height: parent.height * 0.80
+        modal: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+        padding: 0
+        focus: true                      // Important for ESC to work
+
+        background: Rectangle {
+            color: "#050505"
+            border.color: cyanFade
+            border.width: 1
+            radius: 4
+        }
+
+        ColumnLayout {
+            anchors.fill: parent
+            anchors.margins: 0
+            spacing: 0
+
+            // Title bar
+            Rectangle {
+                Layout.fillWidth: true
+                height: 38
+                color: "#0a0a0a"
+                radius: 4
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14
+                    anchors.rightMargin: 14
+
+                    Text {
+                        text: "DEBUG LOG"
+                        color: cyan
+                        font.pixelSize: 11
+                        font.letterSpacing: 3
+                        font.bold: true
+                        font.family: "Courier New"
+                    }
+
+                    Text {
+                        text: "F12 to toggle · ESC to close · click outside to close"
+                        color: cyan
+                        font.pixelSize: 10
+                        font.family: "Courier New"
+                        leftPadding: 12
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    // Stats row
+                    Text {
+                        text: "watchlist:" + watchlist.count +
+                              "  alerts:" + alertModel.count +
+                              "  log:" + logger.entries.length
+                        color: cyan
+                        font.pixelSize: 10
+                        font.family: "Courier New"
+                    }
+
+                    Rectangle {
+                        width: 52; height: 22; radius: 3
+                        color: dbClearArea.containsMouse ? "#1a0000" : "transparent"
+                        border.color: dbClearArea.containsMouse ? redCol : "#2a2a2a"
+                        border.width: 1
+
+                        Text {
+                            anchors.centerIn: parent
+                            text: "CLEAR"
+                            color: dbClearArea.containsMouse ? redCol : "#444"
+                            font.pixelSize: 9
+                            font.letterSpacing: 1
+                            font.family: "Courier New"
+                        }
+                        MouseArea {
+                            id: dbClearArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: logger.clear()
+                        }
+                    }
+                }
+            }
+
+            Rectangle { Layout.fillWidth: true; height: 1; color: borderCol }
+
+            // Log list (rest remains the same)
+            ListView {
+                id: logView
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                model: logger.entries
+                clip: true
+                spacing: 0
+                verticalLayoutDirection: ListView.TopToBottom   // Normal order
+
+                ScrollBar.vertical: ScrollBar {
+                        policy: ScrollBar.AsNeeded
+                        active: true
+
+                        background: Rectangle {
+                            implicitWidth: 8
+                            color: "#0a0a0a"          // dark panel color
+                            radius: 4
+                        }
+
+                        contentItem: Rectangle {
+                            implicitWidth: 6
+                            radius: 4
+                            color: logView.movingVertically ||
+                                   (parent && parent.pressed) ? cyan : cyanDim
+                            opacity: logView.movingVertically ||
+                                     (parent && parent.pressed) ? 1.0 : 0.6
+                        }
+                }
+
+                // Auto-scroll to bottom when new log arrives
+                onCountChanged: {
+                    Qt.callLater(scrollToBottom)
+                }
+
+                function scrollToBottom() {
+                    if (count > 0)
+                        positionViewAtIndex(count - 1, ListView.End)
+                }
+
+                delegate: Rectangle {
+                    width: logView.width
+                    height: logLine.implicitHeight + 4
+                    color: index % 2 === 0 ? "#050505" : "#070707"
+
+                    readonly property bool isWarn:   modelData.indexOf("WARN") !== -1
+                    readonly property bool isCrit:   modelData.indexOf("CRIT") !== -1 || modelData.indexOf("FATAL") !== -1
+                    readonly property bool isSignal: modelData.indexOf("SignalEngine") !== -1
+                    readonly property bool isFetch:  modelData.indexOf("Provider") !== -1 || modelData.indexOf("Fetch") !== -1 || modelData.indexOf("fetch") !== -1
+                    readonly property bool isQml:    modelData.indexOf("QML") !== -1
+
+                    // left accent bar
+                    Rectangle {
+                        width: 2; height: parent.height
+                        color: isCrit   ? redCol   :
+                               isWarn   ? orange    :
+                               isSignal ? greenCol  :
+                               isFetch  ? cyanDim   :
+                               isQml    ? cyan       : "transparent"
+                        opacity: 0.7
+                    }
+
+                    Text {
+                        id: logLine
+                        anchors.left: parent.left
+                        anchors.leftMargin: 10
+                        anchors.right: parent.right
+                        anchors.rightMargin: 8
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: modelData
+                        color: isCrit   ? redCol   :
+                               isWarn   ? orange    :
+                               isSignal ? greenCol  :
+                               isFetch  ? cyanDim   :
+                               isQml    ? cyan       : "#555"
+                        font.pixelSize: 11
+                        font.family: "Courier New"
+                        wrapMode: Text.WrapAnywhere
+                    }
+                }
+
+                Text {
+                    anchors.centerIn: parent
+                    visible: logger.entries.length === 0
+                    text: "No log entries yet"
+                    color: "#222"
+                    font.pixelSize: 12
+                    font.family: "Courier New"
+                }
+            }
+
+            Rectangle { Layout.fillWidth: true; height: 1; color: borderCol }
+
+            // Quick inject row
+            Rectangle {
+                Layout.fillWidth: true
+                height: 36
+                color: "#0a0a0a"
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 10
+                    anchors.rightMargin: 10
+                    spacing: 8
+
+                    Text {
+                        text: ">"
+                        color: cyan
+                        font.pixelSize: 13
+                        font.family: "Courier New"
+                    }
+
+                    TextInput {
+                        id: debugInput
+                        Layout.fillWidth: true
+                        color: cyan
+                        font.pixelSize: 12
+                        font.family: "Courier New"
+                        verticalAlignment: TextInput.AlignVCenter
+
+                        Keys.onReturnPressed: {
+                            if (text.trim().length > 0) {
+                                logger.log(text)
+                                text = ""
+                            }
+                        }
+
+                        Text {
+                            anchors.fill: parent
+                            text: "Type a message and press Enter to log it…"
+                            color: cyan
+                            font.pixelSize: 12
+                            font.family: "Courier New"
+                            verticalAlignment: Text.AlignVCenter
+                            visible: !debugInput.text && !debugInput.activeFocus
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // -- ROOT LAYOUT ----------------------------------------------------------
     RowLayout {
         anchors.fill: parent
         spacing: 0
 
-        // ====================================================================
+        // ════════════════════════════════════════════════════════════════════
         // LEFT PANEL — Watchlist + Chart
-        // ====================================================================
+        // ════════════════════════════════════════════════════════════════════
         ColumnLayout {
             Layout.preferredWidth: 520
             Layout.maximumWidth: 520
             Layout.fillHeight: true
             spacing: 0
 
-            // === Header bar ====================================================================
+            // -- Header bar --------------------------------------------------
             Rectangle {
                 Layout.fillWidth: true
                 height: 44
@@ -67,74 +403,55 @@ ApplicationWindow {
 
                     Text {
                         text: watchlist.count + " / 20"
-                        color: watchlist.count >= 20 ? red : cyanDim
+                        color: watchlist.count >= 20 ? redCol : cyanDim
                         font.pixelSize: 11
                         font.letterSpacing: 1
                     }
 
-                    // Provider selector
                     ComboBox {
                         id: providerBox
                         implicitWidth: 110
                         implicitHeight: 28
                         model: ["Stooq", "Yahoo"]
-
                         onCurrentIndexChanged: stockFetcher.setProvider(currentIndex)
 
                         background: Rectangle {
-                            color: bg
-                            border.color: cyanFade
-                            border.width: 1
-                            radius: 3
+                            color: bg; border.color: cyanFade; border.width: 1; radius: 3
                         }
                         contentItem: Text {
                             text: providerBox.displayText
-                            color: cyanDim
-                            font.pixelSize: 11
-                            verticalAlignment: Text.AlignVCenter
-                            leftPadding: 8
+                            color: cyanDim; font.pixelSize: 11
+                            verticalAlignment: Text.AlignVCenter; leftPadding: 8
                         }
                         delegate: ItemDelegate {
                             width: providerBox.width
                             background: Rectangle {
-                                color: highlighted ? hover : bg
+                                color: highlighted ? hoverCol : bg
                                 border.color: "#001a1a"
                             }
                             contentItem: Text {
                                 text: modelData
                                 color: highlighted ? cyan : cyanDim
-                                font.pixelSize: 11
-                                leftPadding: 8
+                                font.pixelSize: 11; leftPadding: 8
                                 verticalAlignment: Text.AlignVCenter
                             }
                         }
                         popup: Popup {
-                            y: providerBox.height
-                            width: providerBox.width
-                            padding: 0
+                            y: providerBox.height; width: providerBox.width; padding: 0
                             background: Rectangle { color: bg; border.color: cyanFade; border.width: 1 }
                             contentItem: ListView {
                                 implicitHeight: contentHeight
-                                model: providerBox.delegateModel
-                                clip: true
+                                model: providerBox.delegateModel; clip: true
                             }
                         }
                     }
 
-                    // Refresh button
                     Rectangle {
                         width: 28; height: 28
-                        color: refreshArea.containsMouse ? hover : "transparent"
-                        border.color: cyanFade
-                        border.width: 1
-                        radius: 3
+                        color: refreshArea.containsMouse ? hoverCol : "transparent"
+                        border.color: cyanFade; border.width: 1; radius: 3
 
-                        Text {
-                            anchors.centerIn: parent
-                            text: "↺"
-                            color: cyan
-                            font.pixelSize: 16
-                        }
+                        Text { anchors.centerIn: parent; text: "↺"; color: cyan; font.pixelSize: 16 }
                         MouseArea {
                             id: refreshArea
                             anchors.fill: parent
@@ -146,7 +463,7 @@ ApplicationWindow {
                 }
             }
 
-            // ── Watchlist column headers ─────────────────────────────────────
+            // -- Watchlist column headers -------------------------------------
             Rectangle {
                 Layout.fillWidth: true
                 height: 24
@@ -156,24 +473,21 @@ ApplicationWindow {
 
                 Row {
                     anchors.verticalCenter: parent.verticalCenter
-                    leftPadding: 14
-                    spacing: 0
-
+                    leftPadding: 14; spacing: 0
                     Text { text: "SYMBOL"; color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 80 }
-                    Text { text: "NAME";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 200 }
+                    Text { text: "NAME";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 180 }
                     Text { text: "PRICE";  color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 80 }
                     Text { text: "CHG%";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 70 }
                 }
             }
 
-            // ── Watchlist rows ───────────────────────────────────────────────
+            // -- Watchlist rows -----------------------------------------------
             ListView {
                 id: watchlistView
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 model: watchlist
                 clip: true
-
                 property string selectedSymbol: ""
 
                 delegate: Rectangle {
@@ -181,103 +495,62 @@ ApplicationWindow {
                     height: 42
                     color: watchlistView.selectedSymbol === symbol
                            ? cyanFade
-                           : (rowArea.containsMouse ? hover : (index % 2 === 0 ? panel : bg))
-
+                           : (rowArea.containsMouse ? hoverCol : (index % 2 === 0 ? panel : bg))
                     border.color: borderCol
                     border.width: 1
 
                     Row {
                         anchors.verticalCenter: parent.verticalCenter
-                        leftPadding: 14
-                        spacing: 0
+                        leftPadding: 14; spacing: 0
 
-                        Text {
-                            text: symbol
-                            color: cyan
-                            font.pixelSize: 13
-                            font.bold: true
-                            width: 80
-                        }
-                        Text {
-                            text: name
-                            color: cyanDim
-                            font.pixelSize: 12
-                            width: 200
-                            elide: Text.ElideRight
-                        }
+                        Text { text: symbol; color: cyan; font.pixelSize: 13; font.bold: true; width: 80 }
+                        Text { text: name; color: cyanDim; font.pixelSize: 12; width: 180; elide: Text.ElideRight }
                         Text {
                             text: price > 0 ? price.toFixed(2) : "—"
                             color: price > 0 ? cyan : "#444"
-                            font.pixelSize: 13
-                            font.bold: true
-                            width: 80
+                            font.pixelSize: 13; font.bold: true; width: 80
                         }
                         Text {
                             readonly property double pct: changePct
                             text: price > 0 ? (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%" : "—"
-                            color: pct > 0 ? green : (pct < 0 ? red : "#444")
-                            font.pixelSize: 12
-                            width: 70
+                            color: pct > 0 ? greenCol : (pct < 0 ? redCol : "#444")
+                            font.pixelSize: 12; width: 70
                         }
                     }
 
-                    // Remove button (appears on hover)
                     Rectangle {
-                        anchors.right: parent.right
-                        anchors.rightMargin: 10
+                        anchors.right: parent.right; anchors.rightMargin: 10
                         anchors.verticalCenter: parent.verticalCenter
-                        width: 22; height: 22
-                        radius: 11
-
-                        z: 10
-
-                        color: removeArea.containsMouse ? red : "transparent"
-                        border.color: removeArea.containsMouse ? red : "#333"
+                        width: 22; height: 22; radius: 11
+                        color: removeArea.containsMouse ? redCol : "transparent"
+                        border.color: removeArea.containsMouse ? redCol : "#333"
                         border.width: 1
                         visible: rowArea.containsMouse || removeArea.containsMouse
                         opacity: 0.85
 
                         Text {
-                            anchors.centerIn: parent
-                            text: "×"
+                            anchors.centerIn: parent; text: "×"
                             color: removeArea.containsMouse ? "white" : "#666"
                             font.pixelSize: 14
                         }
                         MouseArea {
-                            id: removeArea
-                            anchors.fill: parent
-                            hoverEnabled: true
-
-                            z: 11
-
-                            cursorShape: Qt.PointingHandCursor
-
-                            onPressed: mouse.accepted = true   // stop propagation
-                            onClicked: {
-                                console.log("REMOVE", symbol)
-                                watchlist.removeStock(symbol)
-                            }
+                            id: removeArea; anchors.fill: parent
+                            hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                            onClicked: watchlist.removeStock(symbol)
                         }
                     }
 
                     MouseArea {
-                        id: rowArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        z: 1
-
-                        onClicked: (mouse) => {
-                            // ONLY handle click if it didn't come from remove button
-                            if (!removeArea.containsMouse) {
-                                watchlistView.selectedSymbol = symbol
-                                historyModel.setSymbol(symbol)
-                                stockFetcher.fetchHistory(symbol)
-                            }
+                        id: rowArea; anchors.fill: parent; hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            watchlistView.selectedSymbol = symbol
+                            historyModel.setSymbol(symbol)
+                            stockFetcher.fetchHistory(symbol)
                         }
                     }
                 }
 
-                // Empty state
                 Column {
                     anchors.centerIn: parent
                     visible: watchlist.count === 0
@@ -285,31 +558,25 @@ ApplicationWindow {
 
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "→"
-                        color: cyanFade
-                        font.pixelSize: 28
+                        text: "→"; color: cyanFade; font.pixelSize: 28
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "Search stocks on the right"
-                        color: "#666"
-                        font.pixelSize: 13
-                        horizontalAlignment: Text.AlignHCenter
+                        color: "#666"; font.pixelSize: 13
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "and add them to your watchlist"
-                        color: "#444"
-                        font.pixelSize: 12
-                        horizontalAlignment: Text.AlignHCenter
+                        color: "#444"; font.pixelSize: 12
                     }
                 }
             }
 
-            // ── Chart ────────────────────────────────────────────────────────
+            // -- Chart --------------------------------------------------------
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 220
+                Layout.preferredHeight: 200
                 color: panel
                 border.color: borderCol
                 border.width: 1
@@ -322,11 +589,8 @@ ApplicationWindow {
                     Text {
                         visible: watchlistView.selectedSymbol !== ""
                         text: watchlistView.selectedSymbol + "  —  1 YEAR"
-                        color: cyanDim
-                        font.pixelSize: 10
-                        font.letterSpacing: 2
-                        leftPadding: 8
-                        topPadding: 4
+                        color: cyanDim; font.pixelSize: 10; font.letterSpacing: 2
+                        leftPadding: 8; topPadding: 4
                     }
 
                     ChartView {
@@ -338,56 +602,43 @@ ApplicationWindow {
                         backgroundColor: "transparent"
                         plotAreaColor: "transparent"
                         legend.visible: false
-                        margins.top: 4
-                        margins.bottom: 4
-                        margins.left: 4
-                        margins.right: 4
+                        margins.top: 4; margins.bottom: 4
+                        margins.left: 4; margins.right: 4
 
                         ValueAxis { id: xAxis; labelsVisible: false; gridVisible: false; lineVisible: false; color: "transparent" }
-                        ValueAxis { id: yAxis; labelsColor: "#555";  gridLineColor: "#1a1a1a"; labelFormat: "%.0f" }
+                        ValueAxis { id: yAxis; labelsColor: "#555"; gridLineColor: "#1a1a1a"; labelFormat: "%.0f" }
 
                         LineSeries {
-                            id: series
-                            axisX: xAxis
-                            axisY: yAxis
-                            color: cyan
-                            width: 1.5
+                            id: priceSeries; axisX: xAxis; axisY: yAxis
+                            color: cyan; width: 1.5
                         }
 
                         function rebuildChart() {
-                            series.clear()
+                            priceSeries.clear()
                             const count = historyModel.rowCount()
                             if (count === 0) return
-
-                            let minY =  999999
-                            let maxY = -999999
-
+                            let minY = 999999, maxY = -999999
                             for (let i = 0; i < count; i++) {
                                 const p = historyModel.priceAt(i)
-                                series.append(i, p)
+                                priceSeries.append(i, p)
                                 if (p < minY) minY = p
                                 if (p > maxY) maxY = p
                             }
-
-                            xAxis.min = 0
-                            xAxis.max = Math.max(1, count - 1)
-                            yAxis.min = minY * 0.99
-                            yAxis.max = maxY * 1.01
+                            xAxis.min = 0; xAxis.max = Math.max(1, count - 1)
+                            yAxis.min = minY * 0.99; yAxis.max = maxY * 1.01
                         }
 
                         Connections {
                             target: historyModel
-                            function onModelReset()   { Qt.callLater(chart.rebuildChart) }
+                            function onModelReset()    { Qt.callLater(chart.rebuildChart) }
                             function onSymbolChanged() { Qt.callLater(chart.rebuildChart) }
                         }
 
-                        // No data label
                         Text {
                             anchors.centerIn: parent
                             visible: historyModel.rowCount() === 0 && watchlistView.selectedSymbol === ""
                             text: "Click a stock to see its chart"
-                            color: "#2a2a2a"
-                            font.pixelSize: 12
+                            color: "#2a2a2a"; font.pixelSize: 12
                         }
                     }
                 }
@@ -395,17 +646,17 @@ ApplicationWindow {
         }
 
         // Vertical divider
-        Rectangle { width: 1; Layout.fillHeight: true; color: border }
+        Rectangle { width: 1; Layout.fillHeight: true; color: borderCol }
 
         // ════════════════════════════════════════════════════════════════════
-        // RIGHT PANEL — Browse / Search S&P 500
+        // RIGHT PANEL — Browse + Alerts
         // ════════════════════════════════════════════════════════════════════
         ColumnLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
 
-            // ── Search header ────────────────────────────────────────────────
+            // -- Search header ------------------------------------------------
             Rectangle {
                 Layout.fillWidth: true
                 height: 44
@@ -415,31 +666,23 @@ ApplicationWindow {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 14
-                    anchors.rightMargin: 14
+                    anchors.leftMargin: 14; anchors.rightMargin: 14
                     spacing: 10
 
                     Text {
                         text: "S&P 500"
-                        color: cyan
-                        font.pixelSize: 11
-                        font.letterSpacing: 3
-                        font.bold: true
+                        color: cyan; font.pixelSize: 11; font.letterSpacing: 3; font.bold: true
                     }
 
-                    // Search box
                     Rectangle {
-                        Layout.fillWidth: true
-                        height: 28
+                        Layout.fillWidth: true; height: 28
                         color: bg
                         border.color: searchField.activeFocus ? cyan : cyanFade
-                        border.width: 1
-                        radius: 3
+                        border.width: 1; radius: 3
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 8
-                            anchors.rightMargin: 8
+                            anchors.leftMargin: 8; anchors.rightMargin: 8
                             spacing: 6
 
                             Text { text: "⌕"; color: "#444"; font.pixelSize: 14 }
@@ -447,27 +690,21 @@ ApplicationWindow {
                             TextInput {
                                 id: searchField
                                 Layout.fillWidth: true
-                                color: cyan
-                                font.pixelSize: 12
-                                verticalAlignment: TextInput.AlignVCenter
-                                clip: true
+                                color: cyan; font.pixelSize: 12
+                                verticalAlignment: TextInput.AlignVCenter; clip: true
                                 onTextChanged: browseModel.filter = text
 
                                 Text {
                                     anchors.fill: parent
                                     text: "Search symbol or name…"
-                                    color: "#333"
-                                    font.pixelSize: 12
+                                    color: "#333"; font.pixelSize: 12
                                     verticalAlignment: Text.AlignVCenter
                                     visible: !searchField.text && !searchField.activeFocus
                                 }
                             }
 
-                            // Clear button
                             Text {
-                                text: "×"
-                                color: "#444"
-                                font.pixelSize: 14
+                                text: "×"; color: "#444"; font.pixelSize: 14
                                 visible: searchField.text.length > 0
                                 MouseArea {
                                     anchors.fill: parent
@@ -480,25 +717,20 @@ ApplicationWindow {
                 }
             }
 
-            // ── Browse column headers ────────────────────────────────────────
+            // -- Browse column headers ----------------------------------------
             Rectangle {
-                Layout.fillWidth: true
-                height: 24
-                color: panelAlt
-                border.color: borderCol
-                border.width: 1
+                Layout.fillWidth: true; height: 24
+                color: panelAlt; border.color: borderCol; border.width: 1
 
                 Row {
                     anchors.verticalCenter: parent.verticalCenter
-                    leftPadding: 14
-                    spacing: 0
-
+                    leftPadding: 14; spacing: 0
                     Text { text: "SYMBOL"; color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 90 }
                     Text { text: "NAME";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2 }
                 }
             }
 
-            // ── Browse list ──────────────────────────────────────────────────
+            // -- Browse list --------------------------------------------------
             ListView {
                 id: browseView
                 Layout.fillWidth: true
@@ -507,59 +739,43 @@ ApplicationWindow {
                 clip: true
 
                 delegate: Rectangle {
-                    width: browseView.width
-                    height: 38
-                    color: browseArea.containsMouse ? hover : (index % 2 === 0 ? panel : bg)
-                    border.color: borderCol
-                    border.width: 1
+                    width: browseView.width; height: 38
+                    color: browseArea.containsMouse ? hoverCol : (index % 2 === 0 ? panel : bg)
+                    border.color: borderCol; border.width: 1
 
                     readonly property bool inWatch: watchlist.contains(symbol)
 
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 10
+                        anchors.leftMargin: 14; anchors.rightMargin: 10
 
                         Text {
                             text: symbol
                             color: inWatch ? cyanDim : cyan
-                            font.pixelSize: 12
-                            font.bold: true
-                            width: 90
+                            font.pixelSize: 12; font.bold: true; width: 90
                         }
                         Text {
                             text: name
                             color: inWatch ? "#444" : cyanDim
                             font.pixelSize: 12
-                            Layout.fillWidth: true
-                            elide: Text.ElideRight
+                            Layout.fillWidth: true; elide: Text.ElideRight
                         }
 
-                        // Add / already-in-watchlist indicator
                         Rectangle {
-                            width: 56; height: 22
-                            radius: 3
-                            color: inWatch
-                                   ? "transparent"
-                                   : (addArea.containsMouse ? cyan : "transparent")
+                            width: 56; height: 22; radius: 3
+                            color: inWatch ? "transparent" : (addArea.containsMouse ? cyan : "transparent")
                             border.color: inWatch ? "#2a2a2a" : (addArea.containsMouse ? cyan : cyanFade)
                             border.width: 1
 
                             Text {
                                 anchors.centerIn: parent
                                 text: inWatch ? "✓" : "+ ADD"
-                                color: inWatch
-                                       ? "#444"
-                                       : (addArea.containsMouse ? bg : cyanDim)
-                                font.pixelSize: 10
-                                font.letterSpacing: 1
-                                font.bold: true
+                                color: inWatch ? "#444" : (addArea.containsMouse ? bg : cyanDim)
+                                font.pixelSize: 10; font.letterSpacing: 1; font.bold: true
                             }
 
                             MouseArea {
-                                id: addArea
-                                anchors.fill: parent
-                                hoverEnabled: true
+                                id: addArea; anchors.fill: parent; hoverEnabled: true
                                 cursorShape: inWatch ? Qt.ArrowCursor : Qt.PointingHandCursor
                                 enabled: !inWatch && watchlist.count < 20
                                 onClicked: watchlist.addStock(symbol, name)
@@ -568,14 +784,191 @@ ApplicationWindow {
                     }
 
                     MouseArea {
-                        id: browseArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        // hover only — addArea handles the actual click
-                        // propagate so addArea (child z-order) still receives clicks
+                        id: browseArea; anchors.fill: parent; hoverEnabled: true
                         propagateComposedEvents: true
                         onClicked: mouse.accepted = false
                     }
+                }
+            }
+
+            // Horizontal divider
+            Rectangle { Layout.fillWidth: true; height: 1; color: borderCol }
+
+            // -- Alerts header ------------------------------------------------
+            Rectangle {
+                Layout.fillWidth: true; height: 36
+                color: panel; border.color: borderCol; border.width: 1
+
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14; anchors.rightMargin: 14
+
+                    Text {
+                        text: "SIGNALS"
+                        color: cyan; font.pixelSize: 11; font.letterSpacing: 3; font.bold: true
+                    }
+
+                    // Live badge
+                    Rectangle {
+                        width: 6; height: 6; radius: 3
+                        color: greenCol
+                        SequentialAnimation on opacity {
+                            loops: Animation.Infinite
+                            NumberAnimation { to: 0.2; duration: 800 }
+                            NumberAnimation { to: 1.0; duration: 800 }
+                        }
+                    }
+
+                    Item { Layout.fillWidth: true }
+
+                    Text {
+                        text: alertModel.count + " alerts"
+                        color: "#444"; font.pixelSize: 10; font.letterSpacing: 1
+                    }
+
+                    // TEST button
+                    Rectangle {
+                        width: 52; height: 22; radius: 3
+                        color: testArea.containsMouse ? "#001a0d" : "transparent"
+                        border.color: testArea.containsMouse ? greenCol : "#2a2a2a"
+                        border.width: 1
+
+                        Text {
+                            anchors.centerIn: parent; text: "TEST"
+                            color: testArea.containsMouse ? greenCol : "#444"
+                            font.pixelSize: 9; font.letterSpacing: 1
+                        }
+                        MouseArea {
+                            id: testArea; anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: alertModel.addTestSignal(
+                                watchlistView.selectedSymbol !== "" ? watchlistView.selectedSymbol : "TEST"
+                            )
+                        }
+                    }
+
+                    // CLEAR button
+                    Rectangle {
+                        width: 52; height: 22; radius: 3
+                        color: clearArea.containsMouse ? "#1a0000" : "transparent"
+                        border.color: clearArea.containsMouse ? redCol : "#2a2a2a"
+                        border.width: 1
+                        visible: alertModel.count > 0
+
+                        Text {
+                            anchors.centerIn: parent; text: "CLEAR"
+                            color: clearArea.containsMouse ? redCol : "#444"
+                            font.pixelSize: 9; font.letterSpacing: 1
+                        }
+                        MouseArea {
+                            id: clearArea; anchors.fill: parent; hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: alertModel.clear()
+                        }
+                    }
+                }
+            }
+
+            // -- Alerts column headers ----------------------------------------
+            Rectangle {
+                Layout.fillWidth: true; height: 22
+                color: panelAlt; border.color: borderCol; border.width: 1
+
+                Row {
+                    anchors.verticalCenter: parent.verticalCenter
+                    leftPadding: 10; spacing: 0
+                    Text { text: "";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 22 }
+                    Text { text: "SYM";    color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 60 }
+                    Text { text: "SIGNAL"; color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 160 }
+                    Text { text: "VALUE";  color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 70 }
+                    Text { text: "TIME";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2 }
+                }
+            }
+
+            // -- Alerts list --------------------------------------------------
+            ListView {
+                id: alertsView
+                Layout.fillWidth: true
+                Layout.preferredHeight: 180
+                model: alertModel
+                clip: true
+
+                delegate: Rectangle {
+                    width: alertsView.width; height: 34
+                    color: alertRowArea.containsMouse ? hoverCol : (index % 2 === 0 ? panel : bg)
+                    border.color: borderCol; border.width: 1
+
+                    readonly property color typeColor:
+                        signalType === "bullish" ? greenCol :
+                        signalType === "bearish" ? redCol : orange
+
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter
+                        leftPadding: 10; spacing: 0
+
+                        // Colored dot for type
+                        Item {
+                            width: 22; height: 34
+                            Rectangle {
+                                width: 6; height: 6; radius: 3
+                                anchors.centerIn: parent
+                                color: typeColor
+                            }
+                        }
+
+                        Text {
+                            text: symbol; color: cyan
+                            font.pixelSize: 12; font.bold: true; width: 60
+                            anchors.verticalCenter: undefined
+                            height: 34
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                        Text {
+                            text: signalName; color: typeColor
+                            font.pixelSize: 11; width: 160
+                            height: 34; verticalAlignment: Text.AlignVCenter
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            text: signalValue.toFixed(2)
+                            color: "#666"; font.pixelSize: 11; width: 70
+                            height: 34; verticalAlignment: Text.AlignVCenter
+                        }
+                        Text {
+                            text: signalTime; color: "#444"
+                            font.pixelSize: 10
+                            height: 34; verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+
+                    // Subtle left accent bar
+                    Rectangle {
+                        width: 2; height: parent.height
+                        color: typeColor; opacity: 0.6
+                    }
+
+                    MouseArea {
+                        id: alertRowArea; anchors.fill: parent
+                        hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            alertPopup.alertSymbol = symbol
+                            alertPopup.alertName   = signalName
+                            alertPopup.alertType   = signalType
+                            alertPopup.alertDesc   = description
+                            alertPopup.alertTime   = signalTime
+                            alertPopup.alertValue  = signalValue
+                            alertPopup.open()
+                        }
+                    }
+                }
+
+                // Empty state
+                Text {
+                    anchors.centerIn: parent
+                    visible: alertModel.count === 0
+                    text: "Signals appear after fetching history\n(click a watchlist stock)"
+                    color: "#333"; font.pixelSize: 11
+                    horizontalAlignment: Text.AlignHCenter; lineHeight: 1.6
                 }
             }
         }

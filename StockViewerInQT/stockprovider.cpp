@@ -50,7 +50,7 @@ Stock StooqProvider::parse(const QString &symbol,
         s.prevClose = prevCloseValue.toString().toDouble();
 
     qDebug() << "[StooqProvider] parse() called for:" << symbol;
-    qDebug() << "[StooqProvider] raw size:" << data.size();
+    // qDebug() << "[StooqProvider] raw size:" << data.size();
 
     return s;
 }
@@ -137,7 +137,7 @@ Stock YahooProvider::parse(const QString &symbol,
         s.prevClose = meta["previousClose"].toDouble();
 
     qDebug() << "[YahooProvider] parse() called for:" << symbol;
-    qDebug() << "[YahooProvider] raw size:" << data.size();
+    // qDebug() << "[YahooProvider] raw size:" << data.size();
 
     return s;
 }

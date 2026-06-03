@@ -7,6 +7,8 @@
 
 #include "StockModel.h"
 #include "StockFetcher.h"
+#include "alertmodel.h"
+#include "logger.h"
 #include <QQmlContext>
 #include <QTextStream>
 #include <QFile>
@@ -52,6 +54,7 @@ static QList<QPair<QString,QString>> loadSymbolsFromCSV(const QString &filePath)
 
 int main(int argc, char *argv[])
 {
+    qInstallMessageHandler(Logger::messageHandler);
     QApplication app(argc, argv);
 
     // --- Models ---
@@ -59,9 +62,21 @@ int main(int argc, char *argv[])
     WatchlistModel   watchlist;
     StockHistoryStore historyStore;
     StockHistoryModel historyModel(&historyStore);
+    AlertModel        alertModel;
+
+    // --- Signal engine ---
+    SignalEngine signalEngine(&historyStore, &watchlist, &alertModel);
 
     // --- Fetcher (only knows about the watchlist) ---
     StockFetcher fetcher(&watchlist, &historyStore, &app);
+
+    // When history arrives for a symbol -> run signal analysis
+    QObject::connect(&historyStore, &StockHistoryStore::historyUpdated,
+                     &signalEngine, &SignalEngine::analyze);
+
+    // When stock added to watchlist -> fetch price immediately
+    QObject::connect(&watchlist, &WatchlistModel::countChanged,
+                     &fetcher,   &StockFetcher::refreshNow);
 
     // --- Expose to QML ---
     QQmlApplicationEngine engine;
@@ -70,6 +85,8 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("historyModel",  &historyModel);
     engine.rootContext()->setContextProperty("historyStore",  &historyStore);
     engine.rootContext()->setContextProperty("stockFetcher",  &fetcher);
+    engine.rootContext()->setContextProperty("alertModel",    &alertModel);
+    engine.rootContext()->setContextProperty("logger",       Logger::instance());
 
     engine.loadFromModule("StockViewerInQT", "Main");
 
