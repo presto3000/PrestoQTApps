@@ -115,7 +115,7 @@ ApplicationWindow {
     }
 
 
-    // -- DEBUG PANEL (F12) ----------------------------------------------------
+    // -- DEBUG PANEL (F1) ----------------------------------------------------
     Shortcut {
         sequence: "F1"
         context: Qt.ApplicationShortcut
@@ -493,64 +493,108 @@ ApplicationWindow {
                 delegate: Rectangle {
                     width: watchlistView.width
                     height: 42
+
                     color: watchlistView.selectedSymbol === symbol
                            ? cyanFade
                            : (rowArea.containsMouse ? hoverCol : (index % 2 === 0 ? panel : bg))
+
                     border.color: borderCol
                     border.width: 1
 
-                    Row {
-                        anchors.verticalCenter: parent.verticalCenter
-                        leftPadding: 14; spacing: 0
 
-                        Text { text: symbol; color: cyan; font.pixelSize: 13; font.bold: true; width: 80 }
-                        Text { text: name; color: cyanDim; font.pixelSize: 12; width: 180; elide: Text.ElideRight }
-                        Text {
-                            text: price > 0 ? price.toFixed(2) : "—"
-                            color: price > 0 ? cyan : "#444"
-                            font.pixelSize: 13; font.bold: true; width: 80
-                        }
-                        Text {
-                            readonly property double pct: changePct
-                            text: price > 0 ? (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%" : "—"
-                            color: pct > 0 ? greenCol : (pct < 0 ? redCol : "#444")
-                            font.pixelSize: 12; width: 70
-                        }
-                    }
-
-                    Rectangle {
-                        anchors.right: parent.right; anchors.rightMargin: 10
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 22; height: 22; radius: 11
-                        color: removeArea.containsMouse ? redCol : "transparent"
-                        border.color: removeArea.containsMouse ? redCol : "#333"
-                        border.width: 1
-                        visible: rowArea.containsMouse || removeArea.containsMouse
-                        opacity: 0.85
-
-                        Text {
-                            anchors.centerIn: parent; text: "×"
-                            color: removeArea.containsMouse ? "white" : "#666"
-                            font.pixelSize: 14
-                        }
-                        MouseArea {
-                            id: removeArea; anchors.fill: parent
-                            hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                            onClicked: watchlist.removeStock(symbol)
-                        }
-                    }
-
+                    // ---------------------------------------------
+                    // LEFT CLICK AREA (EXCLUDES DELETE BUTTON)
+                    // ---------------------------------------------
                     MouseArea {
-                        id: rowArea; anchors.fill: parent; hoverEnabled: true
+                        id: rowArea
+                        anchors.left: parent.left
+                        anchors.top: parent.top
+                        anchors.bottom: parent.bottom
+                        anchors.right: removeBtnArea.left
+
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
+
                         onClicked: {
                             watchlistView.selectedSymbol = symbol
                             historyModel.setSymbol(symbol)
                             stockFetcher.fetchHistory(symbol)
                         }
                     }
-                }
 
+
+                    // ---------------------------------------------
+                    // DELETE BUTTON AREA
+                    // ---------------------------------------------
+                    Item {
+                        id: removeBtnArea
+                        width: 32
+                        height: parent.height
+                        anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+
+
+                        Rectangle {
+                            id: removeBtn
+                            width: 22
+                            height: 22
+                            radius: 11
+                            anchors.centerIn: parent
+
+                            color: removeArea.containsMouse ? redCol : "transparent"
+                            border.color: removeArea.containsMouse ? redCol : "#333"
+                            border.width: 1
+                            opacity: 0.85
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: "×"
+                                color: removeArea.containsMouse ? "white" : "#666"
+                                font.pixelSize: 14
+                            }
+
+                            MouseArea {
+                                id: removeArea
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+
+                                onClicked: {
+                                    watchlist.removeStock(symbol)
+                                }
+                            }
+                        }
+                    }
+
+
+                    // ---------------------------------------------
+                    // ROW CONTENT
+                    // ---------------------------------------------
+                    Row {
+                        anchors.verticalCenter: parent.verticalCenter
+                        leftPadding: 14
+                        spacing: 0
+
+                        Text { text: symbol; color: cyan; font.pixelSize: 13; font.bold: true; width: 80 }
+                        Text { text: name; color: cyanDim; font.pixelSize: 12; width: 180; elide: Text.ElideRight }
+
+                        Text {
+                            text: price > 0 ? price.toFixed(2) : "—"
+                            color: price > 0 ? cyan : "#444"
+                            font.pixelSize: 13
+                            font.bold: true
+                            width: 80
+                        }
+
+                        Text {
+                            readonly property double pct: changePct
+                            text: price > 0 ? (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%" : "—"
+                            color: pct > 0 ? greenCol : (pct < 0 ? redCol : "#444")
+                            font.pixelSize: 12
+                            width: 70
+                        }
+                    }
+                }
                 Column {
                     anchors.centerIn: parent
                     visible: watchlist.count === 0

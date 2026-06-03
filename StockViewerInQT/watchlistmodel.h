@@ -44,6 +44,9 @@ private:
     };
 
     QList<WatchEntry> m_entries;
+
+    void saveWatchlist();
+    void loadWatchlist();
 };
 
 #endif // WATCHLISTMODEL_H

@@ -1,9 +1,12 @@
 #include "watchlistmodel.h"
 #include <QDebug>
+#include <QSettings>
 
 WatchlistModel::WatchlistModel(QObject *parent)
     : QAbstractListModel(parent)
-{}
+{
+    loadWatchlist();
+}
 
 int WatchlistModel::rowCount(const QModelIndex &) const
 {
@@ -54,6 +57,7 @@ bool WatchlistModel::addStock(const QString &symbol, const QString &name)
     beginInsertRows({}, m_entries.size(), m_entries.size());
     m_entries.append({ symbol.toUpper(), name, 0.0, 0.0 });
     endInsertRows();
+    saveWatchlist();
 
     emit countChanged();
     return true;
@@ -66,6 +70,8 @@ void WatchlistModel::removeStock(const QString &symbol)
             beginRemoveRows({}, i, i);
             m_entries.removeAt(i);
             endRemoveRows();
+            saveWatchlist();
+
             emit countChanged();
             return;
         }
@@ -103,4 +109,49 @@ void WatchlistModel::updatePrice(const QString &symbol, double price, double pre
             return;
         }
     }
+}
+
+void WatchlistModel::saveWatchlist()
+{
+    QSettings settings("StockViewerQT", "StockViewerQT");
+    qDebug() << "Settings file:" << settings.fileName();
+
+    QStringList stocks;
+
+    for (const auto &e : m_entries)
+    {
+        stocks << QString("%1|%2").arg(e.symbol).arg(e.name);
+    }
+
+    settings.setValue("watchlist", stocks);
+}
+
+void WatchlistModel::loadWatchlist()
+{
+    QSettings settings("StockViewerQT", "StockViewerQT");
+    qDebug() << "Settings file:" << settings.fileName();
+
+    QStringList stocks = settings.value("watchlist").toStringList();
+
+    beginResetModel();
+
+    m_entries.clear();
+
+    for (const QString &item : stocks)
+    {
+        QStringList parts = item.split('|');
+
+        if (parts.size() < 2)
+            continue;
+
+        WatchEntry e;
+        e.symbol = parts[0];
+        e.name = parts[1];
+
+        m_entries.append(e);
+    }
+
+    endResetModel();
+
+    emit countChanged();
 }
