@@ -25,6 +25,9 @@ public:
     void setProvider(bool useYahoo);
 
     Q_INVOKABLE void setProvider(int index);
+
+    void setAlpacaCredentials(const QString &key, const QString &secret);
+
     Q_INVOKABLE void fetchHistory(const QString &symbol);
 
     // Fetch prices for all current watchlist symbols right now
@@ -40,19 +43,11 @@ private:
     void fetchPrice(const QString &symbol);
 
     QNetworkAccessManager m_manager;
-    StockModel *m_model;
-
-
-    QStringList m_symbols;
-
-    QList<Stock> m_cache;
-    int m_pendingReplies = 0;
-
-    QStringList m_allSymbols;
-    int m_batchSize = 0;
-    int m_currentIndex = 0;
 
     std::unique_ptr<IStockProvider> m_provider;
+
+    QString m_alpacaKey;
+    QString m_alpacaSecret;
 
     QTimer m_timer;
     WatchlistModel       *m_watchlist;

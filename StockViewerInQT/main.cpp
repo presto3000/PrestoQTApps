@@ -9,9 +9,39 @@
 #include "StockFetcher.h"
 #include "alertmodel.h"
 #include "logger.h"
+#include "alpacawebsocket.h"
 #include <QQmlContext>
 #include <QTextStream>
 #include <QFile>
+
+// Reads KEY=VALUE pairs from a file, ignores blank lines and # comments.
+// Call before anything that needs credentials.
+static QMap<QString,QString> loadEnv(const QString &path)
+{
+    QMap<QString,QString> env;
+    QFile file(path);
+
+    if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+        qWarning() << "[env] Could not open" << path
+                   << "— set ALPACA_KEY and ALPACA_SECRET in .env";
+        return env;
+    }
+
+    QTextStream in(&file);
+    while (!in.atEnd()) {
+        const QString line = in.readLine().trimmed();
+        if (line.isEmpty() || line.startsWith('#'))
+            continue;
+        const int eq = line.indexOf('=');
+        if (eq < 1) continue;
+        const QString key = line.left(eq).trimmed();
+        const QString val = line.mid(eq + 1).trimmed();
+        env[key] = val;
+    }
+
+    qDebug() << "[env] Loaded" << env.size() << "keys from" << path;
+    return env;
+}
 
 static QList<QPair<QString,QString>> loadSymbolsFromCSV(const QString &filePath)
 {
@@ -57,6 +87,17 @@ int main(int argc, char *argv[])
     qInstallMessageHandler(Logger::messageHandler);
     QApplication app(argc, argv);
 
+
+    // Load .env — looks next to the executable
+    const QString envPath = QCoreApplication::applicationDirPath() + "/Keys.env";
+    const QMap<QString,QString> env = loadEnv(envPath);
+
+    const QString alpacaKey    = env.value("ALPACA_KEY");
+    const QString alpacaSecret = env.value("ALPACA_SECRET");
+
+    const bool hasAlpaca = !alpacaKey.isEmpty() && !alpacaSecret.isEmpty();
+    qDebug() << "[main] Alpaca credentials:" << (hasAlpaca ? "found" : "NOT FOUND — live feed disabled");
+
     // --- Models ---
     StockModel       browseModel;
     WatchlistModel   watchlist;
@@ -65,10 +106,21 @@ int main(int argc, char *argv[])
     AlertModel        alertModel;
 
     // --- Signal engine ---
-    SignalEngine signalEngine(&historyStore, &watchlist, &alertModel);
+    SignalEngine signalEngine(&historyStore, &watchlist, &alertModel, &app);
 
-    // --- Fetcher (only knows about the watchlist) ---
+    // --- Fetcher ---
     StockFetcher fetcher(&watchlist, &historyStore, &app);
+
+    // --- Alpaca WebSocket (live quotes) ---
+    AlpacaWebSocket alpacaWs(&watchlist, &app);
+
+    if (hasAlpaca) {
+        alpacaWs.setCredentials(alpacaKey, alpacaSecret);
+        fetcher.setAlpacaCredentials(alpacaKey, alpacaSecret);
+
+        // Switch fetcher to Alpaca provider for history
+        fetcher.setProvider(2);
+    }
 
     // When history arrives for a symbol -> run signal analysis
     QObject::connect(&historyStore, &StockHistoryStore::historyUpdated,
@@ -87,6 +139,12 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("stockFetcher",  &fetcher);
     engine.rootContext()->setContextProperty("alertModel",    &alertModel);
     engine.rootContext()->setContextProperty("logger",       Logger::instance());
+    engine.rootContext()->setContextProperty("alpacaWs",      &alpacaWs);
+    engine.rootContext()->setContextProperty("hasAlpaca",     hasAlpaca);
+
+    // Load symbols
+    auto symbols = loadSymbolsFromCSV(":/csv/sp500.csv");
+    browseModel.setSymbols(symbols);
 
     engine.loadFromModule("StockViewerInQT", "Main");
 
@@ -95,12 +153,15 @@ int main(int argc, char *argv[])
         return -1;
     }
 
-    // --- Load symbol list ---
-    auto symbols = loadSymbolsFromCSV(":/csv/sp500.csv");
-    browseModel.setSymbols(symbols);
-
-    // --- Start price refresh timer (30s) ---
-    fetcher.start(30000);
+    if (hasAlpaca) {
+        // Connect WebSocket — live prices come in via trades/quotes
+        alpacaWs.connectToFeed();
+        // Still poll REST every 60s as a safety net for missed WS ticks
+        fetcher.start(60000);
+    } else {
+        // No Alpaca — fall back to Stooq/Yahoo polling every 30s
+        fetcher.start(30000);
+    }
 
     return app.exec();
 }

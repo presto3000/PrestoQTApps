@@ -34,22 +34,49 @@ void StockFetcher::stop()
 void StockFetcher::fetchPrice(const QString &symbol)
 {
     QNetworkRequest request{QUrl(m_provider->buildUrl(symbol))};
-    request.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0");
+    request.setHeader(
+        QNetworkRequest::UserAgentHeader,
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/122.0.0.0 Safari/537.36"
+        );
+
+    // Apply Alpaca auth headers if needed
+    if (auto *ap = dynamic_cast<AlpacaProvider*>(m_provider.get()))
+        ap->applyHeaders(request);
 
     QNetworkReply *reply = m_manager.get(request);
 
     connect(reply, &QNetworkReply::finished, this, [this, reply, symbol]() {
+        // Safely read everything FIRST
+        const QByteArray data = reply->readAll();
+        const auto error = reply->error();
+        const int httpStatus =
+            reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+
         reply->deleteLater();
 
-        if (reply->error() != QNetworkReply::NoError) {
-            qWarning() << "Price fetch error for" << symbol << ":" << reply->errorString();
+        // Network error
+        if (error != QNetworkReply::NoError) {
+            qWarning() << "Price fetch error for" << symbol << ":"
+                       << reply->errorString();
             return;
         }
 
-        Stock s = m_provider->parse(symbol, reply->readAll());
+        // HTTP error (403, 404, 500, etc.)
+        if (httpStatus != 200) {
+            qWarning() << "HTTP error for" << symbol << ":"
+                       << httpStatus;
+            qWarning() << "Response preview:" << data.left(200);
+            return;
+        }
 
-        if (s.price <= 0.0) {
-            qWarning() << "Invalid price for" << symbol;
+        // Let provider parse safely
+        Stock s = m_provider->parse(symbol, data);
+
+        if (s.price <= 0.0 || std::isnan(s.price)) {
+            qWarning() << "Invalid price for" << symbol
+                       << "raw data:" << data.left(200);
             return;
         }
 
@@ -62,6 +89,9 @@ void StockFetcher::fetchHistory(const QString &symbol)
 {
     QNetworkRequest req{QUrl(m_provider->buildHistoryUrl(symbol))};
     req.setHeader(QNetworkRequest::UserAgentHeader, "Mozilla/5.0");
+
+    if (auto *ap = dynamic_cast<AlpacaProvider*>(m_provider.get()))
+        ap->applyHeaders(req);
 
     QNetworkReply *reply = m_manager.get(req);
 
@@ -89,15 +119,18 @@ void StockFetcher::setProvider(bool useYahoo)
 
 void StockFetcher::setProvider(int index)
 {
-    if (index == 1)
+    if (index == 1) {
         m_provider = std::make_unique<YahooProvider>();
-    else
+    } else if (index == 2) {
+        auto p = std::make_unique<AlpacaProvider>();
+        p->setCredentials(m_alpacaKey, m_alpacaSecret);
+        m_provider = std::move(p);
+    } else {
         m_provider = std::make_unique<StooqProvider>();
+    }
 
     qDebug() << "Provider switched to index:" << index;
     emit providerChanged();
-
-    // Re-fetch immediately with new provider
     refreshNow();
 }
 
@@ -113,4 +146,8 @@ void StockFetcher::refreshNow()
         fetchPrice(symbol);
 }
 
-
+void StockFetcher::setAlpacaCredentials(const QString &key, const QString &secret)
+{
+    m_alpacaKey    = key;
+    m_alpacaSecret = secret;
+}

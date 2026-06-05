@@ -202,3 +202,67 @@ QVector<PricePoint> YahooProvider::parseHistory(const QByteArray &data) const
 
     return result;
 }
+
+void AlpacaProvider::applyHeaders(QNetworkRequest &req) const
+{
+    req.setRawHeader("APCA-API-KEY-ID",     m_key.toUtf8());
+    req.setRawHeader("APCA-API-SECRET-KEY", m_secret.toUtf8());
+}
+
+QString AlpacaProvider::buildUrl(const QString &symbol) const
+{
+    // Latest trade endpoint
+    return QString("https://data.alpaca.markets/v2/stocks/%1/trades/latest")
+        .arg(symbol.toUpper());
+}
+
+Stock AlpacaProvider::parse(const QString &symbol, const QByteArray &data) const
+{
+    Stock s;
+    s.symbol = symbol.toUpper();
+    s.name   = s.symbol;
+    s.price  = 0.0;
+
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isObject()) return s;
+
+    // { "trade": { "p": 182.5, ... } }
+    QJsonObject trade = doc.object()["trade"].toObject();
+    s.price = trade["p"].toDouble();
+
+    qDebug() << "[AlpacaProvider] parse()" << symbol << "price:" << s.price;
+    return s;
+}
+
+QString AlpacaProvider::buildHistoryUrl(const QString &symbol) const
+{
+    // 1 year of daily bars
+    QDate from = QDate::currentDate().addYears(-1);
+    return QString(
+               "https://data.alpaca.markets/v2/stocks/%1/bars"
+               "?timeframe=1Day&start=%2&limit=365&feed=iex"
+               ).arg(symbol.toUpper(), from.toString("yyyy-MM-dd"));
+}
+
+QVector<PricePoint> AlpacaProvider::parseHistory(const QByteArray &data) const
+{
+    QVector<PricePoint> result;
+
+    QJsonDocument doc = QJsonDocument::fromJson(data);
+    if (!doc.isObject()) return result;
+
+    QJsonArray bars = doc.object()["bars"].toArray();
+    result.reserve(bars.size());
+
+    for (const QJsonValue &v : bars) {
+        QJsonObject bar = v.toObject();
+        PricePoint  p;
+        p.time  = QDateTime::fromString(bar["t"].toString(), Qt::ISODate);
+        p.price = bar["c"].toDouble();   // close price
+        if (p.price > 0.0)
+            result.append(p);
+    }
+
+    qDebug() << "[AlpacaProvider] parseHistory() bars:" << result.size();
+    return result;
+}

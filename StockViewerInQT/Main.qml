@@ -408,11 +408,38 @@ ApplicationWindow {
                         font.letterSpacing: 1
                     }
 
+                    // Live feed status dot (only visible when Alpaca selected)
+                    Row {
+                        spacing: 5
+                        visible: providerBox.currentIndex === 2
+                        anchors.verticalCenter: undefined
+                        Rectangle {
+                            width: 7; height: 7; radius: 4
+                            anchors.verticalCenter: parent.verticalCenter
+                            color: alpacaWs.connected ? greenCol : "#555"
+                                                SequentialAnimation on opacity {
+                                loops: Animation.Infinite
+                                running: alpacaWs.connected
+                                NumberAnimation { to: 0.3; duration: 700 }
+                                NumberAnimation { to: 1.0; duration: 700 }
+                            }
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: alpacaWs.connected ? "LIVE" : "CONNECTING…"
+                            color: alpacaWs.connected ? greenCol : "#555"
+                            font.pixelSize: 9
+                            font.letterSpacing: 1
+                            font.bold: true
+                        }
+                    }
+
                     ComboBox {
                         id: providerBox
                         implicitWidth: 110
                         implicitHeight: 28
-                        model: ["Stooq", "Yahoo"]
+                        currentIndex: 2
+                        model: ["Stooq", "Yahoo", "Alpaca"]
                         onCurrentIndexChanged: stockFetcher.setProvider(currentIndex)
 
                         background: Rectangle {
