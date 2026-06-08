@@ -108,15 +108,6 @@ void StockFetcher::fetchHistory(const QString &symbol)
     });
 }
 
-void StockFetcher::setProvider(bool useYahoo)
-{
-    if (useYahoo)
-        m_provider = std::make_unique<YahooProvider>();
-    else
-        m_provider = std::make_unique<StooqProvider>();
-}
-
-
 void StockFetcher::setProvider(int index)
 {
     if (index == 1) {

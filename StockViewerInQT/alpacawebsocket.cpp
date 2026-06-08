@@ -165,8 +165,9 @@ void AlpacaWebSocket::handleQuote(const QJsonObject &obj)
     double mid = (ask > 0.0 && bid > 0.0)
                      ? (ask + bid) / 2.0
                      : qMax(ask, bid);
-
-    m_watchlist->updatePrice(symbol, mid, 0.0);
+    // TODO: CHANGE IT TO DISPLAY LEVEL 1 ORDER BOOK
+    // qDebug() << "[AlpacaWS] Quote" << symbol << mid;
+    // m_watchlist->updatePrice(symbol, mid, 0.0);
 }
 
 void AlpacaWebSocket::subscribeAll()

@@ -25,6 +25,8 @@ qt_add_qml_module(appStockViewerInQT
     URI StockViewerInQT
     QML_FILES
         Main.qml
+    RESOURCES
+        res.qrc
     SOURCES
         stockmodel.h stockmodel.cpp
         stockfetcher.h stockfetcher.cpp
@@ -36,8 +38,9 @@ qt_add_qml_module(appStockViewerInQT
         alertmodel.h alertmodel.cpp
         logger.h logger.cpp
         alpacawebsocket.h alpacawebsocket.cpp
-    RESOURCES
-        res.qrc
+        alpacapositionprovider.h alpacapositionprovider.cpp
+        ipositionprovider.h
+        SOURCES positionmodel.h positionmodel.cpp
 )
 
 set_target_properties(appStockViewerInQT PROPERTIES

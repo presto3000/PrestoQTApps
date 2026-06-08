@@ -10,6 +10,8 @@
 #include "alertmodel.h"
 #include "logger.h"
 #include "alpacawebsocket.h"
+#include "alpacapositionprovider.h"
+#include "positionmodel.h"
 #include <QQmlContext>
 #include <QTextStream>
 #include <QFile>
@@ -87,8 +89,7 @@ int main(int argc, char *argv[])
     qInstallMessageHandler(Logger::messageHandler);
     QApplication app(argc, argv);
 
-
-    // Load .env — looks next to the executable
+    // Load Keys.env
     const QString envPath = QCoreApplication::applicationDirPath() + "/Keys.env";
     const QMap<QString,QString> env = loadEnv(envPath);
 
@@ -114,12 +115,21 @@ int main(int argc, char *argv[])
     // --- Alpaca WebSocket (live quotes) ---
     AlpacaWebSocket alpacaWs(&watchlist, &app);
 
+    // --- Positions ---
+    AlpacaPositionProvider positionProvider;
+    PositionModel          positionModel;
+
     if (hasAlpaca) {
         alpacaWs.setCredentials(alpacaKey, alpacaSecret);
         fetcher.setAlpacaCredentials(alpacaKey, alpacaSecret);
 
         // Switch fetcher to Alpaca provider for history
         fetcher.setProvider(2);
+
+        // Paper vs live - driven by ALPACA_MODE in Keys.env
+        const bool paper = env.value("ALPACA_MODE", "paper") != "live";
+        positionProvider.setCredentials(alpacaKey, alpacaSecret, paper);
+        positionModel.setProvider(&positionProvider, 5000);
     }
 
     // When history arrives for a symbol -> run signal analysis
@@ -141,6 +151,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("logger",       Logger::instance());
     engine.rootContext()->setContextProperty("alpacaWs",      &alpacaWs);
     engine.rootContext()->setContextProperty("hasAlpaca",     hasAlpaca);
+    engine.rootContext()->setContextProperty("positionModel", &positionModel);
 
     // Load symbols
     auto symbols = loadSymbolsFromCSV(":/csv/sp500.csv");
@@ -157,7 +168,7 @@ int main(int argc, char *argv[])
         // Connect WebSocket — live prices come in via trades/quotes
         alpacaWs.connectToFeed();
         // Still poll REST every 60s as a safety net for missed WS ticks
-        fetcher.start(60000);
+        // fetcher.start(60000);
     } else {
         // No Alpaca — fall back to Stooq/Yahoo polling every 30s
         fetcher.start(30000);

@@ -714,6 +714,246 @@ ApplicationWindow {
                     }
                 }
             }
+
+            // ── Positions panel ──────────────────────────────────────────────
+                       Rectangle {
+                           Layout.fillWidth: true
+                           Layout.preferredHeight: 220
+                           color: panel
+                           border.color: borderCol
+                           border.width: 1
+                           visible: hasAlpaca
+
+                           ColumnLayout {
+                               anchors.fill: parent
+                               spacing: 0
+
+                               // Header
+                               Rectangle {
+                                   Layout.fillWidth: true
+                                   height: 34
+                                   color: panelAlt
+
+                                   RowLayout {
+                                       anchors.fill: parent
+                                       anchors.leftMargin: 14
+                                       anchors.rightMargin: 14
+
+                                       Text {
+                                           text: positionModel.isPaper ? "PAPER POSITIONS" : "LIVE POSITIONS"
+                                           color: positionModel.isPaper ? orange : redCol
+                                           font.pixelSize: 11
+                                           font.letterSpacing: 3
+                                           font.bold: true
+                                       }
+
+                                       // Paper badge
+                                       Rectangle {
+                                           visible: positionModel.isPaper
+                                           width: paperLabel.implicitWidth + 10
+                                           height: 18; radius: 3
+                                           color: "#2a1f00"
+                                           Text {
+                                               id: paperLabel
+                                               anchors.centerIn: parent
+                                               text: "PAPER"
+                                               color: orange
+                                               font.pixelSize: 9
+                                               font.letterSpacing: 2
+                                               font.bold: true
+                                           }
+                                       }
+
+                                       Item { Layout.fillWidth: true }
+
+                                       // Loading indicator
+                                       Text {
+                                           text: "↺"
+                                           color: cyanFade
+                                           font.pixelSize: 14
+                                           visible: positionModel.loading
+                                           RotationAnimator on rotation {
+                                               loops: Animation.Infinite
+                                               running: positionModel.loading
+                                               from: 0; to: 360; duration: 1000
+                                           }
+                                       }
+
+                                       // Total P&L
+                                       Text {
+                                           readonly property double pl: positionModel.totalPL
+                                           text: (pl >= 0 ? "+" : "") + "$" + pl.toFixed(2)
+                                           color: pl >= 0 ? greenCol : redCol
+                                           font.pixelSize: 12
+                                           font.bold: true
+                                           visible: positionModel.count > 0
+                                       }
+
+                                       // Refresh button
+                                       Rectangle {
+                                           width: 24; height: 24; radius: 3
+                                           color: posRefreshArea.containsMouse ? hoverCol : "transparent"
+                                           border.color: cyanFade; border.width: 1
+
+                                           Text {
+                                               anchors.centerIn: parent
+                                               text: "↺"; color: cyanDim; font.pixelSize: 13
+                                           }
+                                           MouseArea {
+                                               id: posRefreshArea
+                                               anchors.fill: parent; hoverEnabled: true
+                                               cursorShape: Qt.PointingHandCursor
+                                               onClicked: positionModel.refresh()
+                                           }
+                                       }
+                                   }
+                               }
+
+                               // Column headers
+                               Rectangle {
+                                   Layout.fillWidth: true; height: 22
+                                   color: "#070707"
+
+                                   Row {
+                                       anchors.verticalCenter: parent.verticalCenter
+                                       leftPadding: 12; spacing: 0
+                                       Text { text: "SYM";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 60 }
+                                       Text { text: "QTY";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 50 }
+                                       Text { text: "ENTRY"; color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 68 }
+                                       Text { text: "PRICE"; color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 68 }
+                                       Text { text: "P&L";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 80 }
+                                       Text { text: "%";     color: "#444"; font.pixelSize: 10; font.letterSpacing: 2 }
+                                   }
+                               }
+
+                               // Positions list
+                               ListView {
+                                   id: positionsView
+                                   Layout.fillWidth: true
+                                   Layout.fillHeight: true
+                                   model: positionModel
+                                   clip: true
+
+                                   delegate: Rectangle {
+                                       width: positionsView.width
+                                       height: 34
+                                       color: posRowArea.containsMouse ? hoverCol
+                                            : (index % 2 === 0 ? panel : bg)
+                                       border.color: borderCol; border.width: 1
+
+                                       readonly property bool isProfit: unrealizedPL >= 0
+
+                                       // Left accent — green for profit, red for loss
+                                       Rectangle {
+                                           width: 2; height: parent.height
+                                           color: isProfit ? greenCol : redCol
+                                           opacity: 0.7
+                                       }
+
+                                       Row {
+                                           anchors.verticalCenter: parent.verticalCenter
+                                           leftPadding: 12; spacing: 0
+
+                                           Text {
+                                               text: symbol; color: cyan
+                                               font.pixelSize: 12; font.bold: true; width: 60
+                                           }
+                                           Text {
+                                               text: qty % 1 === 0 ? qty.toFixed(0) : qty.toFixed(2)
+                                               color: side === "short" ? redCol : cyanDim
+                                               font.pixelSize: 11; width: 50
+                                           }
+                                           Text {
+                                               text: "$" + avgEntry.toFixed(2)
+                                               color: "#666"; font.pixelSize: 11; width: 68
+                                           }
+                                           Text {
+                                               text: "$" + currentPrice.toFixed(2)
+                                               color: cyanDim; font.pixelSize: 11; width: 68
+                                           }
+                                           Text {
+                                               text: (isProfit ? "+" : "") + "$" + unrealizedPL.toFixed(2)
+                                               color: isProfit ? greenCol : redCol
+                                               font.pixelSize: 11; font.bold: true; width: 80
+                                           }
+                                           Text {
+                                               readonly property double pct: unrealizedPLPct
+                                               text: (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%"
+                                               color: pct >= 0 ? greenCol : redCol
+                                               font.pixelSize: 11
+                                           }
+                                       }
+
+                                       // Close button — appears on hover
+                                       Rectangle {
+                                           anchors.right: parent.right
+                                           anchors.rightMargin: 8
+                                           anchors.verticalCenter: parent.verticalCenter
+
+                                           width: 46
+                                           height: 22
+                                           radius: 3
+
+                                           visible: posRowArea.containsMouse || closePosArea.containsMouse
+
+                                           color: closePosArea.containsMouse ? "#330000" : "transparent"
+                                           border.color: closePosArea.containsMouse ? redCol : "#333"
+                                           border.width: 1
+
+                                           z: 2
+
+                                           Text {
+                                               anchors.centerIn: parent
+                                               text: "CLOSE"
+                                               color: closePosArea.containsMouse ? redCol : "#555"
+                                               font.pixelSize: 9
+                                               font.letterSpacing: 1
+                                           }
+
+                                           MouseArea {
+                                               id: closePosArea
+                                               anchors.fill: parent
+                                               hoverEnabled: true
+                                               cursorShape: Qt.PointingHandCursor
+
+                                               z: 3   // ensures hover is always captured first
+
+                                               onClicked: {
+                                                   positionModel.closePosition(symbol)
+                                               }
+                                           }
+                                       }
+
+                                       // Row area
+                                       MouseArea {
+                                           id: posRowArea
+                                           anchors.fill: parent
+                                           hoverEnabled: true
+                                           z: 1   // below close button
+                                           onClicked: mouse.accepted = false
+                                       }
+                                   }
+
+                                   // Empty state
+                                   Column {
+                                       anchors.centerIn: parent
+                                       visible: positionModel.count === 0 && !positionModel.loading
+                                       spacing: 6
+                                       Text {
+                                           anchors.horizontalCenter: parent.horizontalCenter
+                                           text: "No open positions"
+                                           color: "#333"; font.pixelSize: 12
+                                       }
+                                       Text {
+                                           anchors.horizontalCenter: parent.horizontalCenter
+                                           text: positionModel.providerName
+                                           color: "#222"; font.pixelSize: 10
+                                           font.letterSpacing: 1
+                                       }
+                                   }
+                               }
+                           }
+                       }
         }
 
         // Vertical divider

@@ -22,7 +22,6 @@ public:
     void stop();
 
     void fetch(const QStringList &symbols);
-    void setProvider(bool useYahoo);
 
     Q_INVOKABLE void setProvider(int index);
 
