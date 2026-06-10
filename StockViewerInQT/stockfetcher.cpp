@@ -116,6 +116,10 @@ void StockFetcher::setProvider(int index)
         auto p = std::make_unique<AlpacaProvider>();
         p->setCredentials(m_alpacaKey, m_alpacaSecret);
         m_provider = std::move(p);
+    } else if (index == 3) {
+        auto p = std::make_unique<FinnhubProvider>();
+        p->setApiKey(m_finnhubKey);
+        m_provider = std::move(p);
     } else {
         m_provider = std::make_unique<StooqProvider>();
     }
@@ -141,4 +145,10 @@ void StockFetcher::setAlpacaCredentials(const QString &key, const QString &secre
 {
     m_alpacaKey    = key;
     m_alpacaSecret = secret;
+}
+
+void StockFetcher::setFinnhubApiKey(const QString &key)
+{
+    m_finnhubKey = key;
+    qDebug() << "[StockFetcher] Finnhub API key" << (key.isEmpty() ? "cleared" : "set");
 }

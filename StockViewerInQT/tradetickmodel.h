@@ -9,9 +9,10 @@ class WatchlistModel;
 struct TradeTick {
     QDateTime time;
     QString   symbol;
-    double    price  = 0.0;
-    int       size   = 0;
+    double    price    = 0.0;
+    int       size     = 0;
     QString   side;       // "buy" | "sell" | "" (unknown)
+    QString   exchange;   // e.g. "EDGX", "ARCA", "NYSE", "BATS", "NASDAQ"
 };
 
 class TradeTickModel : public QAbstractListModel
@@ -32,7 +33,8 @@ public:
         PriceRole,
         SizeRole,
         SideRole,
-        SymbolRole
+        SymbolRole,
+        ExchangeRole
     };
 
     explicit TradeTickModel(WatchlistModel *watchlist, QObject *parent = nullptr);

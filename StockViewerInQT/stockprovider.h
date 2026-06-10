@@ -58,4 +58,22 @@ private:
     QString m_secret;
 };
 
+
+// Quota: 60 req/min on free tier
+class FinnhubProvider : public IStockProvider
+{
+public:
+    void setApiKey(const QString &key) { m_key = key; }
+
+    QString buildUrl(const QString &symbol) const override;
+    Stock   parse(const QString &symbol, const QByteArray &data) const override;
+    QString buildHistoryUrl(const QString &symbol) const override;
+    QVector<PricePoint> parseHistory(const QByteArray &data) const override;
+
+    void applyHeaders(QNetworkRequest &req) const;
+
+private:
+    QString m_key;
+};
+
 #endif // STOCKPROVIDER_H

@@ -46,6 +46,7 @@ QVariant TradeTickModel::data(const QModelIndex &index, int role) const
     case SizeRole:   return t.size;
     case SideRole:   return t.side;
     case SymbolRole: return t.symbol;
+    case ExchangeRole: return t.exchange;
     }
     return {};
 }
@@ -58,6 +59,7 @@ QHash<int, QByteArray> TradeTickModel::roleNames() const
             { SizeRole,   "tickSize"  },
             { SideRole,   "tickSide"  },
             { SymbolRole, "tickSymbol"},
+            { ExchangeRole, "tickExchange" },
             };
 }
 

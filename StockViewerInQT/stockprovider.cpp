@@ -266,3 +266,118 @@ QVector<PricePoint> AlpacaProvider::parseHistory(const QByteArray &data) const
     qDebug() << "[AlpacaProvider] parseHistory() bars:" << result.size();
     return result;
 }
+
+// =============================================================================
+// FinnhubProvider
+// =============================================================================
+
+void FinnhubProvider::applyHeaders(QNetworkRequest &req) const
+{
+    req.setRawHeader("X-Finnhub-Token", m_key.toUtf8());
+}
+
+// Quote endpoint: https://finnhub.io/api/v1/quote?symbol=AAPL
+QString FinnhubProvider::buildUrl(const QString &symbol) const
+{
+    return QString("https://finnhub.io/api/v1/quote?symbol=%1&token=%2").arg(symbol.toUpper(), m_key);
+}
+
+Stock FinnhubProvider::parse(const QString &symbol, const QByteArray &data) const
+{
+    Stock s;
+    s.symbol = symbol.toUpper();
+    s.name   = s.symbol;
+    s.price  = 0.0;
+    s.prevClose = 0.0;
+
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        qWarning() << "[FinnhubProvider] JSON parse error for" << symbol << ":" << err.errorString();
+        return s;
+    }
+
+    // { "c": current, "h": high, "l": low, "o": open,
+    //   "pc": prev close, "t": timestamp }
+    QJsonObject obj = doc.object();
+
+    s.price     = obj["c"].toDouble();
+    s.prevClose = obj["pc"].toDouble();
+
+    qDebug() << "[FinnhubProvider] parse()" << symbol
+             << "price:" << s.price << "prevClose:" << s.prevClose;
+    return s;
+}
+
+// Candle endpoint - 1 year of daily bars
+// https://finnhub.io/api/v1/stock/candle?symbol=AAPL&resolution=D&from=...&to=...
+// QString FinnhubProvider::buildHistoryUrl(const QString &symbol) const
+// {
+//     const qint64 to   = QDateTime::currentSecsSinceEpoch();
+//     const qint64 from = to - 365LL * 24 * 3600;   // 1 year back
+//
+//     return QString("https://finnhub.io/api/v1/stock/candle""?symbol=%1&resolution=D&from=%2&to=%3&token=%4")
+//         .arg(symbol.toUpper())
+//         .arg(from)
+//         .arg(to)
+//         .arg(m_key);
+// }
+
+// History: /stock/candle requires a paid Finnhub plan.
+// Yahoo provider instead
+QString FinnhubProvider::buildHistoryUrl(const QString &symbol) const
+{
+    // Exactly the same URL YahooProvider uses
+    return QString(
+               "https://query1.finance.yahoo.com/v8/finance/chart/%1?interval=1d&range=1y"
+               ).arg(symbol.toUpper());
+}
+
+QVector<PricePoint> FinnhubProvider::parseHistory(const QByteArray &data) const
+{
+    // Identical parsing to YahooProvider::parseHistory — same endpoint, same JSON shape
+    QVector<PricePoint> result;
+
+    QJsonParseError err;
+    QJsonDocument doc = QJsonDocument::fromJson(data, &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) {
+        qWarning() << "[FinnhubProvider] parseHistory: invalid JSON";
+        return result;
+    }
+
+    QJsonObject root = doc.object();
+
+    QJsonValue chartValue = root.value("chart");
+    if (!chartValue.isObject())
+        return result;
+
+    QJsonArray results = chartValue.toObject().value("result").toArray();
+    if (results.isEmpty())
+        return result;
+
+    QJsonObject resultObj = results.first().toObject();
+
+    QJsonArray timestamps = resultObj.value("timestamp").toArray();
+
+    QJsonObject indicators =
+        resultObj.value("indicators").toObject()
+            .value("quote").toArray().first().toObject();
+
+    QJsonArray close = indicators.value("close").toArray();
+
+    const int n = qMin(timestamps.size(), close.size());
+    result.reserve(n);
+
+    for (int i = 0; i < n; ++i) {
+        if (close[i].isNull())
+            continue;
+        PricePoint p;
+        p.time  = QDateTime::fromSecsSinceEpoch(timestamps[i].toInteger());
+        p.price = close[i].toDouble();
+        result.append(p);
+    }
+
+    qDebug() << "[FinnhubProvider] parseHistory() points:" << result.size();
+    return result;
+}

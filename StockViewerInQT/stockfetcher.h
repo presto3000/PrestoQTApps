@@ -26,6 +26,7 @@ public:
     Q_INVOKABLE void setProvider(int index);
 
     void setAlpacaCredentials(const QString &key, const QString &secret);
+    void setFinnhubApiKey(const QString &key);
 
     Q_INVOKABLE void fetchHistory(const QString &symbol);
 
@@ -47,6 +48,7 @@ private:
 
     QString m_alpacaKey;
     QString m_alpacaSecret;
+    QString m_finnhubKey;
 
     QTimer m_timer;
     WatchlistModel       *m_watchlist;

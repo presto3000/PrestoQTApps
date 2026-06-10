@@ -98,9 +98,12 @@ int main(int argc, char *argv[])
 
     const QString alpacaKey    = env.value("ALPACA_KEY");
     const QString alpacaSecret = env.value("ALPACA_SECRET");
+    const QString finnhubKey   = env.value("FINNHUB_KEY");
 
     const bool hasAlpaca = !alpacaKey.isEmpty() && !alpacaSecret.isEmpty();
+    const bool hasFinnhub = !finnhubKey.isEmpty();
     qDebug() << "[main] Alpaca credentials:" << (hasAlpaca ? "found" : "NOT FOUND — live feed disabled");
+    qDebug() << "[main] Finnhub API key:"    << (hasFinnhub ? "found" : "NOT FOUND — Finnhub provider disabled");
 
     // --- Models ---
     StockModel       browseModel;
@@ -138,6 +141,10 @@ int main(int argc, char *argv[])
         positionModel.setProvider(&positionProvider, 5000);
     }
 
+    if (hasFinnhub) {
+        fetcher.setFinnhubApiKey(finnhubKey);
+    }
+
     // When history arrives for a symbol -> run signal analysis
     QObject::connect(&historyStore, &StockHistoryStore::historyUpdated,
                      &signalEngine, &SignalEngine::analyze);
@@ -149,7 +156,7 @@ int main(int argc, char *argv[])
     // --- Expose to QML ---
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("browseModel",   &browseModel);
-    engine.rootContext()->setContextProperty("watchlist",     &watchlist);
+    engine.rootContext()->setContextProperty("watchlistModel",     &watchlist);
     engine.rootContext()->setContextProperty("historyModel",  &historyModel);
     engine.rootContext()->setContextProperty("historyStore",  &historyStore);
     engine.rootContext()->setContextProperty("stockFetcher",  &fetcher);
@@ -157,6 +164,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("logger",       Logger::instance());
     engine.rootContext()->setContextProperty("alpacaWs",      &alpacaWs);
     engine.rootContext()->setContextProperty("hasAlpaca",     hasAlpaca);
+    engine.rootContext()->setContextProperty("hasFinnhub",    hasFinnhub);
     engine.rootContext()->setContextProperty("positionModel", &positionModel);
     engine.rootContext()->setContextProperty("tradeTickModel", &tradeTickModel);
 

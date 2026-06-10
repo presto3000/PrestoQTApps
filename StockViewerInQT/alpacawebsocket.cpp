@@ -144,47 +144,62 @@ void AlpacaWebSocket::handleTrade(const QJsonObject &obj)
     const QString symbol = obj["S"].toString();
     const double  price  = obj["p"].toDouble();
     const int     size   = obj["s"].toInt();
+    // Alpaca sends a single-letter exchange code in "x"
+    const QString xCode  = obj["x"].toString().toUpper();
 
     if (symbol.isEmpty() || price <= 0.0)
         return;
 
-    // Use exchange timestamp when available; fall back to wall clock
-    QDateTime timestamp = QDateTime::fromString(obj["t"].toString(), Qt::ISODateWithMs);
-    if (!timestamp.isValid())
-        timestamp = QDateTime::currentDateTime();
+    // Map single-letter Alpaca exchange codes to readable venue names
+    static const QHash<QString, QString> exchMap = {
+        { "A",  "NYSE MKT"  },
+        { "B",  "NASDAQ BX" },
+        { "C",  "NSX"       },
+        { "D",  "FINRA"     },
+        { "E",  "ARCA"      },   // NYSE Arca
+        { "F",  "MEMX"      },
+        { "H",  "MIAX"      },
+        { "I",  "ISE"       },
+        { "J",  "EDGA"      },
+        { "K",  "EDGX"      },
+        { "L",  "CHX"       },
+        { "M",  "NYSE"      },
+        { "N",  "NYSE"      },
+        { "P",  "ARCA"      },
+        { "Q",  "NASDAQ"    },
+        { "S",  "CONSOLIDATED" },
+        { "T",  "NASDAQ"    },
+        { "U",  "LTSE"      },
+        { "V",  "IEX"       },
+        { "W",  "CBOE"      },
+        { "X",  "PHLX"      },
+        { "Y",  "BATS"      },   // Cboe BYX
+        { "Z",  "BATS"      },   // Cboe BZX
+    };
+
+    const QString exchange = exchMap.value(xCode, xCode.isEmpty() ? "—" : xCode);
 
     const QuoteSnapshot snap = m_quotes.value(symbol);
 
     QString side;
-    if (snap.bid > 0.0 && snap.ask > 0.0) {
-        const double mid = (snap.bid + snap.ask) / 2.0;
-        if (price > mid)
-            side = "buy";
-        else if (price < mid)
-            side = "sell";
-        else
-            side = m_lastSide.value(symbol, "buy");  // carry previous direction at exact mid
-    } else if (snap.ask > 0.0 && price >= snap.ask) {
-        side = "buy";
-    } else if (snap.bid > 0.0 && price <= snap.bid) {
-        side = "sell";
-    } else {
-        side = m_lastSide.value(symbol, "");
-    }
 
-    if (!side.isEmpty())
-        m_lastSide[symbol] = side;
+    if (snap.ask > 0.0 && price >= snap.ask)
+        side = "buy";
+    else if (snap.bid > 0.0 && price <= snap.bid)
+        side = "sell";
+    else
+        side = "unknown";
 
     TradeTick tick;
-    tick.time   = timestamp;
-    tick.symbol = symbol;
-    tick.price  = price;
-    tick.size   = size;
-    tick.side   = side;
+    tick.time     = QDateTime::currentDateTime();
+    tick.symbol   = symbol;
+    tick.price    = price;
+    tick.size     = size;
+    tick.side     = side;
+    tick.exchange = exchange;
 
     m_tapeTicks->addTick(tick);
 
-    // Update last price in watchlist
     m_watchlist->updatePrice(symbol, price, 0.0);
 
     // qDebug() << "[AlpacaWS] Trade" << symbol << price;

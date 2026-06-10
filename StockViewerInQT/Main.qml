@@ -189,7 +189,7 @@ ApplicationWindow {
 
                     // Stats row
                     Text {
-                        text: "watchlist:" + watchlist.count +
+                        text: "watchlistModel:" + watchlistModel.count +
                               "  alerts:" + alertModel.count +
                               "  log:" + logger.entries.length
                         color: cyan
@@ -372,7 +372,7 @@ ApplicationWindow {
         spacing: 0
 
         // ════════════════════════════════════════════════════════════════════
-        // LEFT PANEL — Watchlist + Chart
+        // LEFT PANEL — watchlistModel + Chart
         // ════════════════════════════════════════════════════════════════════
         ColumnLayout {
             Layout.preferredWidth: 520
@@ -394,7 +394,7 @@ ApplicationWindow {
                     anchors.rightMargin: 14
 
                     Text {
-                        text: "WATCHLIST"
+                        text: "watchlistModel"
                         color: cyan
                         font.pixelSize: 11
                         font.letterSpacing: 3
@@ -404,8 +404,8 @@ ApplicationWindow {
                     Item { Layout.fillWidth: true }
 
                     Text {
-                        text: watchlist.count + " / 20"
-                        color: watchlist.count >= 20 ? redCol : cyanDim
+                        text: watchlistModel.count + " / 20"
+                        color: watchlistModel.count >= 20 ? redCol : cyanDim
                         font.pixelSize: 11
                         font.letterSpacing: 1
                     }
@@ -441,7 +441,7 @@ ApplicationWindow {
                         implicitWidth: 110
                         implicitHeight: 28
                         currentIndex: 2
-                        model: ["Stooq", "Yahoo", "Alpaca"]
+                        model: ["Stooq", "Yahoo", "Alpaca", "Finnhub"]
                         onCurrentIndexChanged: stockFetcher.setProvider(currentIndex)
 
                         background: Rectangle {
@@ -492,7 +492,7 @@ ApplicationWindow {
                 }
             }
 
-            // -- Watchlist column headers -------------------------------------
+            // -- watchlistModel column headers -------------------------------------
             Rectangle {
                 Layout.fillWidth: true
                 height: 24
@@ -510,20 +510,20 @@ ApplicationWindow {
                 }
             }
 
-            // -- Watchlist rows -----------------------------------------------
+            // -- watchlistModel rows -----------------------------------------------
             ListView {
-                id: watchlistView
+                id: watchlistModelView
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                model: watchlist
+                model: watchlistModel
                 clip: true
                 property string selectedSymbol: ""
 
                 delegate: Rectangle {
-                    width: watchlistView.width
+                    width: watchlistModelView.width
                     height: 42
 
-                    color: watchlistView.selectedSymbol === symbol
+                    color: watchlistModelView.selectedSymbol === symbol
                            ? cyanFade
                            : (rowArea.containsMouse ? hoverCol : (index % 2 === 0 ? panel : bg))
 
@@ -545,7 +545,7 @@ ApplicationWindow {
                         cursorShape: Qt.PointingHandCursor
 
                         onClicked: {
-                            watchlistView.selectedSymbol = symbol
+                            watchlistModelView.selectedSymbol = symbol
                             historyModel.setSymbol(symbol)
                             stockFetcher.fetchHistory(symbol)
                             tradeTickModel.symbol = symbol
@@ -590,7 +590,7 @@ ApplicationWindow {
                                 cursorShape: Qt.PointingHandCursor
 
                                 onClicked: {
-                                    watchlist.removeStock(symbol)
+                                    watchlistModel.removeStock(symbol)
                                 }
                             }
                         }
@@ -627,7 +627,7 @@ ApplicationWindow {
                 }
                 Column {
                     anchors.centerIn: parent
-                    visible: watchlist.count === 0
+                    visible: watchlistModel.count === 0
                     spacing: 8
 
                     Text {
@@ -641,7 +641,7 @@ ApplicationWindow {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "and add them to your watchlist"
+                        text: "and add them to your watchlistModel"
                         color: seablue; font.pixelSize: 12
                     }
                 }
@@ -661,8 +661,8 @@ ApplicationWindow {
                     spacing: 0
 
                     Text {
-                        visible: watchlistView.selectedSymbol !== ""
-                        text: watchlistView.selectedSymbol + "  —  1 YEAR"
+                        visible: watchlistModelView.selectedSymbol !== ""
+                        text: watchlistModelView.selectedSymbol + "  —  1 YEAR"
                         color: cyanDim; font.pixelSize: 10; font.letterSpacing: 2
                         leftPadding: 8; topPadding: 4
                     }
@@ -710,7 +710,7 @@ ApplicationWindow {
 
                         Text {
                             anchors.centerIn: parent
-                            visible: historyModel.rowCount() === 0 && watchlistView.selectedSymbol === ""
+                            visible: historyModel.rowCount() === 0 && watchlistModelView.selectedSymbol === ""
                             text: "Click a stock to see its chart"
                             color: "#2a2a2a"; font.pixelSize: 12
                         }
@@ -718,69 +718,20 @@ ApplicationWindow {
                 }
             }
 
-            // -- Trade Tape ----------------------------------------------------
+            // -- Order Book / Trade Tape ---------------------------------------
             Rectangle {
-                id: orderBookPanel
                 Layout.fillWidth: true
-                Layout.preferredHeight: 230
+                Layout.preferredHeight: 260
                 color: panel
                 border.color: borderCol
                 border.width: 1
-                visible: watchlistView.selectedSymbol !== ""
-
-                // Last traded price from watchlist (updated on every trade tick via REST + WS)
-                property double lastPrice: {
-                    var sym = watchlistView.selectedSymbol
-                    for (var i = 0; i < watchlist.count; i++) {
-                        var idx = watchlist.index(i, 0)
-                        if (watchlist.data(idx, 257) === sym) {
-                            var p = watchlist.data(idx, 259)  // PriceRole = Qt::UserRole+3
-                            return (p > 0) ? p : 0.0
-                        }
-                    }
-                    return 0.0
-                }
-
-                property double lastChangePct: {
-                    var sym = watchlistView.selectedSymbol
-                    for (var i = 0; i < watchlist.count; i++) {
-                        var idx = watchlist.index(i, 0)
-                        if (watchlist.data(idx, 257) === sym)
-                            return watchlist.data(idx, 261) || 0.0  // ChangePctRole = Qt::UserRole+5
-                    }
-                    return 0.0
-                }
-
-                // Timestamp of last quote arrival — used to detect staleness
-                property var lastQuoteTime: null
-
-                Connections {
-                    target: tradeTickModel
-                    function onSpreadChanged() {
-                        if (tradeTickModel.bid > 0 || tradeTickModel.ask > 0)
-                            orderBookPanel.lastQuoteTime = new Date()
-                    }
-                }
-
-                // Quote is considered stale after 60 seconds without an update
-                property bool quoteStale: {
-                    if (tradeTickModel.bid <= 0 && tradeTickModel.ask <= 0) return true
-                    if (lastQuoteTime === null) return true
-                    var age = (new Date() - lastQuoteTime) / 1000
-                    return age > 60
-                }
-
-                // Pulse the staleness check every 15s
-                Timer {
-                    interval: 15000; repeat: true; running: orderBookPanel.visible
-                    onTriggered: orderBookPanel.quoteStaleChanged()
-                }
+                visible: watchlistModelView.selectedSymbol !== ""
 
                 ColumnLayout {
                     anchors.fill: parent
                     spacing: 0
 
-                    // -- Header bar ---------------------------------------------
+                    // Header
                     Rectangle {
                         Layout.fillWidth: true
                         height: 34
@@ -792,7 +743,7 @@ ApplicationWindow {
                             anchors.rightMargin: 14
 
                             Text {
-                                text: watchlistView.selectedSymbol + "  TAPE"
+                                text: watchlistModelView.selectedSymbol + "  LEVEL 1 + TAPE"
                                 color: cyan
                                 font.pixelSize: 11
                                 font.letterSpacing: 2
@@ -801,10 +752,9 @@ ApplicationWindow {
 
                             Item { Layout.fillWidth: true }
 
-                            // Spread badge — only shown when quote is fresh
+                            // Spread badge
                             Rectangle {
-                                visible: !orderBookPanel.quoteStale &&
-                                         tradeTickModel.bid > 0 && tradeTickModel.ask > 0
+                                visible: watchlistModel.ask > 0 && watchlistModel.bid > 0
                                 width: spreadLabel.implicitWidth + 14
                                 height: 20; radius: 3
                                 color: cyanFade
@@ -822,81 +772,135 @@ ApplicationWindow {
                         }
                     }
 
-                    // -- Compact price row --------------------------------------
+                    // -- Top of book --------------------------------------------
                     Rectangle {
                         Layout.fillWidth: true
-                        height: 42
+                        height: 54
                         color: "#070707"
 
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 16
-                            anchors.rightMargin: 16
-                            spacing: 20
+                            anchors.margins: 0
+                            spacing: 0
 
-                            // Last traded price
-                            ColumnLayout {
-                                spacing: 1
-                                Text {
-                                    text: "LAST TRADE"
-                                    color: seablue; font.pixelSize: 9; font.letterSpacing: 2
-                                }
-                                Text {
-                                    text: orderBookPanel.lastPrice > 0
-                                          ? "$" + orderBookPanel.lastPrice.toFixed(2) : "—"
-                                    color: cyan; font.pixelSize: 15; font.bold: true
-                                }
-                            }
+                            // BID side
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                color: "transparent"
 
-                            // Change %
-                            ColumnLayout {
-                                spacing: 1
-                                visible: orderBookPanel.lastPrice > 0
-                                Text {
-                                    text: "CHG"
-                                    color: seablue; font.pixelSize: 9; font.letterSpacing: 2
+                                // Volume bar behind the text
+                                Rectangle {
+                                    anchors.right: parent.right
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    width: watchlistModel.bid > 0 && watchlistModel.ask > 0
+                                           ? parent.width * (watchlistModel.bidSize /
+                                             Math.max(watchlistModel.bidSize + watchlistModel.askSize, 1))
+                                           : 0
+                                    color: greenCol
+                                    opacity: 0.08
+                                    Behavior on width { NumberAnimation { duration: 200 } }
                                 }
-                                Text {
-                                    readonly property double pct: orderBookPanel.lastChangePct
-                                    text: (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%"
-                                    color: pct > 0 ? greenCol : pct < 0 ? redCol : seablue
-                                    font.pixelSize: 13; font.bold: true
-                                }
-                            }
 
-                            Item { Layout.fillWidth: true }
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 2
 
-                            // Bid — dimmed when stale
-                            ColumnLayout {
-                                spacing: 1
-                                visible: tradeTickModel.bid > 0
-                                opacity: orderBookPanel.quoteStale ? 0.35 : 1.0
-                                Behavior on opacity { NumberAnimation { duration: 400 } }
-
-                                Text {
-                                    text: orderBookPanel.quoteStale ? "BID  (stale)" : "BID"
-                                    color: seablue; font.pixelSize: 9; font.letterSpacing: 2
-                                }
-                                Text {
-                                    text: "$" + tradeTickModel.bid.toFixed(2)
-                                    color: greenCol; font.pixelSize: 13; font.bold: true
+                                    Text {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: "BID"
+                                        color: seablue; font.pixelSize: 9; font.letterSpacing: 2
+                                    }
+                                    Text {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: watchlistModel.bid > 0
+                                              ? "$" + watchlistModelModel.bid.toFixed(2) : "—"
+                                        color: greenCol
+                                        font.pixelSize: 16; font.bold: true
+                                    }
+                                    Text {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: watchlistModel.bidSize > 0
+                                              ? watchlistModel.bidSize + " sh" : ""
+                                        color: "#555"; font.pixelSize: 10
+                                    }
                                 }
                             }
 
-                            // Ask — dimmed when stale
-                            ColumnLayout {
-                                spacing: 1
-                                visible: tradeTickModel.ask > 0
-                                opacity: orderBookPanel.quoteStale ? 0.35 : 1.0
-                                Behavior on opacity { NumberAnimation { duration: 400 } }
+                            // Center divider with last price
+                            Rectangle {
+                                width: 80; Layout.fillHeight: true
+                                color: "#0a0a0a"
+                                border.color: borderCol; border.width: 1
 
-                                Text {
-                                    text: orderBookPanel.quoteStale ? "ASK  (stale)" : "ASK"
-                                    color: seablue; font.pixelSize: 9; font.letterSpacing: 2
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 1
+
+                                    Text {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: "LAST"
+                                        color: "#333"; font.pixelSize: 9; font.letterSpacing: 2
+                                    }
+                                    Text {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        readonly property var entry: watchlistModelView.selectedSymbol !== "" ? null : null
+                                        text: {
+                                            // find price for selected symbol in watchlistModel
+                                            for (var i = 0; i < watchlistModel.count; i++) {
+                                                var idx = watchlistModel.index(i, 0)
+                                                // use tradeTickModel last tick price as fallback
+                                            }
+                                            return tradeTickModel.count > 0
+                                                   ? "$" + watchlistModel.bid.toFixed(2) : "—"
+                                        }
+                                        color: cyan; font.pixelSize: 13; font.bold: true
+                                    }
                                 }
-                                Text {
-                                    text: "$" + tradeTickModel.ask.toFixed(2)
-                                    color: redCol; font.pixelSize: 13; font.bold: true
+                            }
+
+                            // ASK side
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                                color: "transparent"
+
+                                Rectangle {
+                                    anchors.left: parent.left
+                                    anchors.top: parent.top
+                                    anchors.bottom: parent.bottom
+                                    width: watchlistModel.bid > 0 && watchlistModel.ask > 0
+                                           ? parent.width * (watchlistModel.askSize /
+                                             Math.max(watchlistModel.bidSize + watchlistModel.askSize, 1))
+                                           : 0
+                                    color: redCol
+                                    opacity: 0.08
+                                    Behavior on width { NumberAnimation { duration: 200 } }
+                                }
+
+                                ColumnLayout {
+                                    anchors.centerIn: parent
+                                    spacing: 2
+
+                                    Text {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: "ASK"
+                                        color: seablue; font.pixelSize: 9; font.letterSpacing: 2
+                                    }
+                                    Text {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: watchlistModel.ask > 0
+                                              ? "$" + watchlistModel.ask.toFixed(2) : "—"
+                                        color: redCol
+                                        font.pixelSize: 16; font.bold: true
+                                    }
+                                    Text {
+                                        Layout.alignment: Qt.AlignHCenter
+                                        text: watchlistModel.askSize > 0
+                                              ? watchlistModel.askSize + " sh" : ""
+                                        color: "#555"; font.pixelSize: 10
+                                    }
                                 }
                             }
                         }
@@ -913,7 +917,8 @@ ApplicationWindow {
                             Text { text: "TIME";  color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 72 }
                             Text { text: "PRICE"; color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 90 }
                             Text { text: "SIZE";  color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 80 }
-                            Text { text: "SIDE";  color: seablue; font.pixelSize: 10; font.letterSpacing: 2 }
+                            Text { text: "SIDE";  color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 60 }
+                            Text { text: "EXCH";  color: seablue; font.pixelSize: 10; font.letterSpacing: 2 }
                         }
                     }
 
@@ -960,10 +965,11 @@ ApplicationWindow {
                                     text: tickSize.toLocaleString()
                                     color: "#666"; font.pixelSize: 11; width: 80
                                 }
+                                // SIDE badge
                                 Rectangle {
-                                    width: 36; height: 16; radius: 2
+                                    width: 42; height: 16; radius: 2
                                     anchors.verticalCenter: parent.verticalCenter
-                                    visible: tickSide !== ""
+                                    visible: tickSide !== "" && tickSide !== "unknown"
                                     color: isBuy ? "#002211" : "#220011"
 
                                     Text {
@@ -971,6 +977,31 @@ ApplicationWindow {
                                         text: isBuy ? "BUY" : "SELL"
                                         color: isBuy ? greenCol : redCol
                                         font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                                    }
+                                }
+                                // Spacer when side badge is hidden
+                                Item {
+                                    width: 42; height: 1
+                                    visible: tickSide === "" || tickSide === "unknown"
+                                }
+
+                                // EXCHANGE badge
+                                Rectangle {
+                                    visible: tickExchange !== "" && tickExchange !== "—"
+                                    width: exchLabel.implicitWidth + 10
+                                    height: 16; radius: 2
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    color: "#001520"
+                                    border.color: "#003344"; border.width: 1
+
+                                    Text {
+                                        id: exchLabel
+                                        anchors.centerIn: parent
+                                        text: tickExchange
+                                        color: cyanDim
+                                        font.pixelSize: 9
+                                        font.letterSpacing: 1
+                                        font.family: "Courier New"
                                     }
                                 }
                             }
@@ -1325,7 +1356,9 @@ ApplicationWindow {
                     color: browseArea.containsMouse ? hoverCol : (index % 2 === 0 ? panel : bg)
                     border.color: borderCol; border.width: 1
 
-                    readonly property bool inWatch: watchlist.contains(symbol)
+                    // watchlistModel.count is included so the binding re-evaluates
+                    // whenever an item is added or removed from the watchlistModel.
+                    readonly property bool inWatch: watchlistModel.count, watchlistModel.contains(symbol)
 
                     RowLayout {
                         anchors.fill: parent
@@ -1359,8 +1392,8 @@ ApplicationWindow {
                             MouseArea {
                                 id: addArea; anchors.fill: parent; hoverEnabled: true
                                 cursorShape: inWatch ? Qt.ArrowCursor : Qt.PointingHandCursor
-                                enabled: !inWatch && watchlist.count < 20
-                                onClicked: watchlist.addStock(symbol, name)
+                                enabled: !inWatch && watchlistModel.count < 20
+                                onClicked: watchlistModel.addStock(symbol, name)
                             }
                         }
                     }
@@ -1424,7 +1457,7 @@ ApplicationWindow {
                             id: testArea; anchors.fill: parent; hoverEnabled: true
                             cursorShape: Qt.PointingHandCursor
                             onClicked: alertModel.addTestSignal(
-                                watchlistView.selectedSymbol !== "" ? watchlistView.selectedSymbol : "TEST"
+                                watchlistModelView.selectedSymbol !== "" ? watchlistModelView.selectedSymbol : "TEST"
                             )
                         }
                     }
@@ -1548,7 +1581,7 @@ ApplicationWindow {
                 Text {
                     anchors.centerIn: parent
                     visible: alertModel.count === 0
-                    text: "Signals appear after fetching history\n(click a watchlist stock)"
+                    text: "Signals appear after fetching history\n(click a watchlistModel stock)"
                     color: "#333"; font.pixelSize: 11
                     horizontalAlignment: Text.AlignHCenter; lineHeight: 1.6
                 }

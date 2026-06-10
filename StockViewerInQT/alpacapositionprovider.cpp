@@ -41,7 +41,7 @@ void AlpacaPositionProvider::fetchPositions()
         return;
     }
 
-    qDebug() << "[AlpacaPositions] Fetching from" << name();
+    // qDebug() << "[AlpacaPositions] Fetching from" << name();
 
     auto *reply = m_manager.get(makeRequest("/v2/positions"));
 
@@ -79,7 +79,7 @@ void AlpacaPositionProvider::fetchPositions()
             positions.append(p);
         }
 
-        qDebug() << "[AlpacaPositions] Got" << positions.size() << "positions";
+        // qDebug() << "[AlpacaPositions] Got" << positions.size() << "positions";
         emit positionsFetched(positions);
     });
 }
