@@ -12,6 +12,7 @@
 #include "alpacawebsocket.h"
 #include "alpacapositionprovider.h"
 #include "positionmodel.h"
+#include "finnhubwebsocket.h"
 #include <QQmlContext>
 #include <QTextStream>
 #include <QFile>
@@ -100,8 +101,10 @@ int main(int argc, char *argv[])
     const QString alpacaSecret = env.value("ALPACA_SECRET");
     const QString finnhubKey   = env.value("FINNHUB_KEY");
 
-    const bool hasAlpaca = !alpacaKey.isEmpty() && !alpacaSecret.isEmpty();
-    const bool hasFinnhub = !finnhubKey.isEmpty();
+    bool hasAlpaca = !alpacaKey.isEmpty() && !alpacaSecret.isEmpty();
+    hasAlpaca = false;
+    bool hasFinnhub = !finnhubKey.isEmpty();
+    // hasFinnhub = false;
     qDebug() << "[main] Alpaca credentials:" << (hasAlpaca ? "found" : "NOT FOUND — live feed disabled");
     qDebug() << "[main] Finnhub API key:"    << (hasFinnhub ? "found" : "NOT FOUND — Finnhub provider disabled");
 
@@ -123,6 +126,9 @@ int main(int argc, char *argv[])
 
     // --- Alpaca WebSocket (live quotes) ---
     AlpacaWebSocket alpacaWs(&watchlist, &tradeTickModel, &app);
+    // --- Finnhub WebSocket (live trades, free tier) ---
+    FinnhubWebSocket finnhubWs(&watchlist, &tradeTickModel, &app);
+
 
     // --- Positions ---
     AlpacaPositionProvider positionProvider;
@@ -143,6 +149,9 @@ int main(int argc, char *argv[])
 
     if (hasFinnhub) {
         fetcher.setFinnhubApiKey(finnhubKey);
+        // Switch fetcher to Finnhub provider for history
+        fetcher.setProvider(3);
+        finnhubWs.setApiKey(finnhubKey);
     }
 
     // When history arrives for a symbol -> run signal analysis
@@ -165,6 +174,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("alpacaWs",      &alpacaWs);
     engine.rootContext()->setContextProperty("hasAlpaca",     hasAlpaca);
     engine.rootContext()->setContextProperty("hasFinnhub",    hasFinnhub);
+    engine.rootContext()->setContextProperty("finnhubWs",      &finnhubWs);
     engine.rootContext()->setContextProperty("positionModel", &positionModel);
     engine.rootContext()->setContextProperty("tradeTickModel", &tradeTickModel);
 
@@ -184,9 +194,14 @@ int main(int argc, char *argv[])
         alpacaWs.connectToFeed();
         // Still poll REST every 60s as a safety net for missed WS ticks
         // fetcher.start(60000);
+    } else if (hasFinnhub) {
+        // Finnhub WS as primary live feed when Alpaca is unavailable
+        finnhubWs.connectToFeed();
+        // Finnhub WS is trades-only; still poll REST for history & prev-close
+        fetcher.start(60'000);
     } else {
-        // No Alpaca — fall back to Stooq/Yahoo polling every 30s
-        fetcher.start(30000);
+        // No live feed — fall back to Stooq/Yahoo REST polling every 30 s
+        fetcher.start(30'000);
     }
 
 #ifdef QT_DEBUG

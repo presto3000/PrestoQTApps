@@ -12,7 +12,9 @@ class StockHistoryModel : public QAbstractListModel
 public:
     enum Roles {
         TimeRole = Qt::UserRole + 1,
-        PriceRole
+        PriceRole,
+        Sma20Role,
+        Sma50Role
     };
 
     explicit StockHistoryModel(StockHistoryStore *store, QObject *parent = nullptr);
@@ -25,6 +27,9 @@ public:
     Q_INVOKABLE void setSymbol(const QString &symbol);
     Q_INVOKABLE double priceAt(int index) const;
 
+    Q_INVOKABLE double sma20At(int index) const;
+    Q_INVOKABLE double sma50At(int index) const;
+
 signals:
     void symbolChanged();
 
@@ -32,9 +37,13 @@ private slots:
     void onHistoryUpdated(const QString &symbol);
 
 private:
+    double calculateSMA(int index, int period) const;
+
     QString m_symbol;
     QVector<PricePoint> m_points;
     StockHistoryStore *m_store;
+
+
 };
 
 #endif

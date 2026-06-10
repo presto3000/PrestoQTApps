@@ -189,7 +189,7 @@ ApplicationWindow {
 
                     // Stats row
                     Text {
-                        text: "watchlistModel:" + watchlistModel.count +
+                        text: "WATCHLIST:" + watchlistModel.count +
                               "  alerts:" + alertModel.count +
                               "  log:" + logger.entries.length
                         color: cyan
@@ -394,7 +394,7 @@ ApplicationWindow {
                     anchors.rightMargin: 14
 
                     Text {
-                        text: "watchlistModel"
+                        text: "WATCHLIST"
                         color: cyan
                         font.pixelSize: 11
                         font.letterSpacing: 3
@@ -410,26 +410,36 @@ ApplicationWindow {
                         font.letterSpacing: 1
                     }
 
-                    // Live feed status dot (only visible when Alpaca selected)
+                    // Live feed status dot — visible when a WS-backed provider is selected
                     Row {
+                        id: wsStatusRow
                         spacing: 5
-                        visible: providerBox.currentIndex === 2
+                        // Show for Alpaca (index 2) or Finnhub (index 3)
+                        visible: providerBox.currentIndex === 2 || providerBox.currentIndex === 3
+
+                        readonly property bool wsLive:
+                            providerBox.currentIndex === 2 ? alpacaWs.connected :
+                            providerBox.currentIndex === 3 ? finnhubWs.connected : false
+
+                        readonly property string wsLabel:
+                            providerBox.currentIndex === 3 ? "FH" : "WS"
+
                         anchors.verticalCenter: undefined
                         Rectangle {
                             width: 7; height: 7; radius: 4
                             anchors.verticalCenter: parent.verticalCenter
-                            color: alpacaWs.connected ? greenCol : "#555"
-                                                SequentialAnimation on opacity {
+                            color: parent.wsLive ? greenCol : "#555"
+                            SequentialAnimation on opacity {
                                 loops: Animation.Infinite
-                                running: alpacaWs.connected
+                                running: wsStatusRow.wsLive
                                 NumberAnimation { to: 0.3; duration: 700 }
                                 NumberAnimation { to: 1.0; duration: 700 }
                             }
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: alpacaWs.connected ? "LIVE" : "CONNECTING…"
-                            color: alpacaWs.connected ? greenCol : "#555"
+                            text: parent.wsLive ? "LIVE" : "CONNECTING…"
+                            color: parent.wsLive ? greenCol : "#555"
                             font.pixelSize: 9
                             font.letterSpacing: 1
                             font.bold: true
@@ -440,7 +450,7 @@ ApplicationWindow {
                         id: providerBox
                         implicitWidth: 110
                         implicitHeight: 28
-                        currentIndex: 2
+                        currentIndex: 3
                         model: ["Stooq", "Yahoo", "Alpaca", "Finnhub"]
                         onCurrentIndexChanged: stockFetcher.setProvider(currentIndex)
 
@@ -660,11 +670,22 @@ ApplicationWindow {
                     anchors.margins: 4
                     spacing: 0
 
-                    Text {
-                        visible: watchlistModelView.selectedSymbol !== ""
-                        text: watchlistModelView.selectedSymbol + "  —  1 YEAR"
-                        color: cyanDim; font.pixelSize: 10; font.letterSpacing: 2
-                        leftPadding: 8; topPadding: 4
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Text {
+                            text: watchlistModelView.selectedSymbol + " — 1 YEAR"
+                            color: cyan
+                            font.pixelSize: 13
+                            font.bold: true
+                        }
+                        Item { Layout.fillWidth: true }
+
+                        Row {
+                            spacing: 16
+                            Text { text: "● Price"; color: cyan; font.pixelSize: 11 }
+                            Text { text: "— SMA20"; color: "#ffaa00"; font.pixelSize: 11 }
+                            Text { text: "— SMA50"; color: "#bb77ff"; font.pixelSize: 11 }
+                        }
                     }
 
                     ChartView {
@@ -672,7 +693,7 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         antialiasing: true
-                        theme: ChartView.ChartThemeDark
+                        theme: ChartView.ChartThemeBlueCerulean
                         backgroundColor: "transparent"
                         plotAreaColor: "transparent"
                         legend.visible: false
@@ -680,27 +701,67 @@ ApplicationWindow {
                         margins.left: 4; margins.right: 4
 
                         ValueAxis { id: xAxis; labelsVisible: false; gridVisible: false; lineVisible: false; color: "transparent" }
-                        ValueAxis { id: yAxis; labelsColor: "#555"; gridLineColor: "#1a1a1a"; labelFormat: "%.0f" }
+                        ValueAxis { id: yAxis; labelsColor: cyan; gridLineColor: "#1a1a1a"; labelFormat: "%.0f" }
+
 
                         LineSeries {
-                            id: priceSeries; axisX: xAxis; axisY: yAxis
-                            color: cyan; width: 1.5
+                            id: priceSeries
+                            axisX: xAxis
+                            axisY: yAxis
+                            color: cyan
+                            width: 1.8
+                        }
+
+                        LineSeries {
+                            id: sma20Series
+                            axisX: xAxis
+                            axisY: yAxis
+                            color: "#ffaa00"   // orange
+                            width: 1.6
+                            style: Qt.DashLine
+                        }
+
+                        LineSeries {
+                            id: sma50Series
+                            axisX: xAxis
+                            axisY: yAxis
+                            color: "#cc66ff"   // purple
+                            width: 1.6
+                            style: Qt.DashLine
                         }
 
                         function rebuildChart() {
                             priceSeries.clear()
-                            const count = historyModel.rowCount()
-                            if (count === 0) return
-                            let minY = 999999, maxY = -999999
-                            for (let i = 0; i < count; i++) {
-                                const p = historyModel.priceAt(i)
-                                priceSeries.append(i, p)
-                                if (p < minY) minY = p
-                                if (p > maxY) maxY = p
-                            }
-                            xAxis.min = 0; xAxis.max = Math.max(1, count - 1)
-                            yAxis.min = minY * 0.99; yAxis.max = maxY * 1.01
+                                sma20Series.clear()
+                                sma50Series.clear()
+
+                                const count = historyModel.rowCount()
+                                if (count === 0) return
+
+                                let minY = 999999, maxY = -999999
+
+                                for (let i = 0; i < count; i++) {
+                                    const price = historyModel.priceAt(i)
+                                    priceSeries.append(i, price)
+
+                                    const sma20 = historyModel.sma20At(i)
+                                    if (!isNaN(sma20))
+                                        sma20Series.append(i, sma20)
+
+                                    const sma50 = historyModel.sma50At(i)
+                                    if (!isNaN(sma50))
+                                        sma50Series.append(i, sma50)
+
+                                    if (price < minY) minY = price
+                                    if (price > maxY) maxY = price
+                                }
+
+                                xAxis.min = 0
+                                xAxis.max = Math.max(1, count - 1)
+                                yAxis.min = minY * 0.985
+                                yAxis.max = maxY * 1.015
                         }
+
 
                         Connections {
                             target: historyModel
@@ -852,8 +913,9 @@ ApplicationWindow {
                                                 var idx = watchlistModel.index(i, 0)
                                                 // use tradeTickModel last tick price as fallback
                                             }
-                                            return tradeTickModel.count > 0
-                                                   ? "$" + watchlistModel.bid.toFixed(2) : "—"
+                                            return tradeTickModel.count > 0 && typeof watchlistModel.bid === "number"
+                                                   ? "$" + watchlistModel.bid.toFixed(2)
+                                                   : "—"
                                         }
                                         color: cyan; font.pixelSize: 13; font.bold: true
                                     }

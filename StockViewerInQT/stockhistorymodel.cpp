@@ -21,10 +21,10 @@ QVariant StockHistoryModel::data(const QModelIndex &index, int role) const
     const auto &p = m_points[index.row()];
 
     switch (role) {
-    case TimeRole:
-        return p.time;
-    case PriceRole:
-        return p.price;
+    case TimeRole:  return p.time;
+    case PriceRole: return p.price;
+    case Sma20Role: return sma20At(index.row());
+    case Sma50Role: return sma50At(index.row());
     }
 
     return {};
@@ -34,7 +34,9 @@ QHash<int, QByteArray> StockHistoryModel::roleNames() const
 {
     return {
         { TimeRole, "time" },
-        { PriceRole, "price" }
+        { PriceRole, "price" },
+        { Sma20Role, "sma20" },
+        { Sma50Role, "sma50" }
     };
 }
 
@@ -74,4 +76,26 @@ void StockHistoryModel::onHistoryUpdated(const QString &symbol)
 
     beginResetModel();
     endResetModel();
+}
+
+double StockHistoryModel::sma20At(int index) const
+{
+    return calculateSMA(index, 20);
+}
+
+double StockHistoryModel::sma50At(int index) const
+{
+    return calculateSMA(index, 50);
+}
+
+double StockHistoryModel::calculateSMA(int index, int period) const
+{
+    if (index < period - 1 || m_points.size() < period)
+        return qQNaN();
+
+    double sum = 0.0;
+    for (int i = 0; i < period; ++i) {
+        sum += m_points[index - i].price;
+    }
+    return sum / period;
 }

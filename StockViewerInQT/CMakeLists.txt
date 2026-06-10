@@ -43,6 +43,7 @@ qt_add_qml_module(appStockViewerInQT
         ipositionprovider.h
         SOURCES positionmodel.h positionmodel.cpp
         SOURCES tradetickmodel.h tradetickmodel.cpp
+        SOURCES finnhubwebsocket.h finnhubwebsocket.cpp
 )
 
 set_target_properties(appStockViewerInQT PROPERTIES
