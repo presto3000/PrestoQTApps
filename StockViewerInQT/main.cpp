@@ -15,6 +15,8 @@
 #include <QQmlContext>
 #include <QTextStream>
 #include <QFile>
+#include <QQuickStyle>
+#include <QTest>
 
 // Reads KEY=VALUE pairs from a file, ignores blank lines and # comments.
 // Call before anything that needs credentials.
@@ -86,6 +88,7 @@ static QList<QPair<QString,QString>> loadSymbolsFromCSV(const QString &filePath)
 
 int main(int argc, char *argv[])
 {
+    QQuickStyle::setStyle("Basic");
     qInstallMessageHandler(Logger::messageHandler);
     QApplication app(argc, argv);
 
@@ -112,8 +115,11 @@ int main(int argc, char *argv[])
     // --- Fetcher ---
     StockFetcher fetcher(&watchlist, &historyStore, &app);
 
+    // --- Trade tape ---
+    TradeTickModel tradeTickModel(&watchlist, &app);
+
     // --- Alpaca WebSocket (live quotes) ---
-    AlpacaWebSocket alpacaWs(&watchlist, &app);
+    AlpacaWebSocket alpacaWs(&watchlist, &tradeTickModel, &app);
 
     // --- Positions ---
     AlpacaPositionProvider positionProvider;
@@ -152,6 +158,7 @@ int main(int argc, char *argv[])
     engine.rootContext()->setContextProperty("alpacaWs",      &alpacaWs);
     engine.rootContext()->setContextProperty("hasAlpaca",     hasAlpaca);
     engine.rootContext()->setContextProperty("positionModel", &positionModel);
+    engine.rootContext()->setContextProperty("tradeTickModel", &tradeTickModel);
 
     // Load symbols
     auto symbols = loadSymbolsFromCSV(":/csv/sp500.csv");
@@ -173,6 +180,10 @@ int main(int argc, char *argv[])
         // No Alpaca — fall back to Stooq/Yahoo polling every 30s
         fetcher.start(30000);
     }
+
+#ifdef QT_DEBUG
+    QTest::qExec(&fetcher);
+#endif
 
     return app.exec();
 }

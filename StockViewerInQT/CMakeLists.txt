@@ -13,6 +13,7 @@ find_package(Qt6 6.5 REQUIRED COMPONENTS
     Qml
     QuickControls2
     WebSockets
+    Test
 )
 
 qt_standard_project_setup()
@@ -41,6 +42,7 @@ qt_add_qml_module(appStockViewerInQT
         alpacapositionprovider.h alpacapositionprovider.cpp
         ipositionprovider.h
         SOURCES positionmodel.h positionmodel.cpp
+        SOURCES tradetickmodel.h tradetickmodel.cpp
 )
 
 set_target_properties(appStockViewerInQT PROPERTIES
@@ -55,6 +57,8 @@ target_link_libraries(appStockViewerInQT
             Qt6::Network
             Qt6::Charts
             Qt6::WebSockets
+            Qt6::Test
+            Qt6::QuickControls2
 )
 
 add_custom_command(TARGET appStockViewerInQT POST_BUILD

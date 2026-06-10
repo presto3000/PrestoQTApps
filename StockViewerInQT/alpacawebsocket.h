@@ -7,6 +7,14 @@
 #include <QStringList>
 #include <QAbstractSocket>
 #include "watchlistmodel.h"
+#include "tradetickmodel.h"
+
+struct QuoteSnapshot {
+    double bid = 0.0;
+    double ask = 0.0;
+    int bidSize = 0;
+    int askSize = 0;
+};
 
 class AlpacaWebSocket : public QObject
 {
@@ -14,8 +22,9 @@ class AlpacaWebSocket : public QObject
     Q_PROPERTY(bool connected READ isConnected NOTIFY connectedChanged)
 
 public:
-    explicit AlpacaWebSocket(WatchlistModel *watchlist,
-                             QObject        *parent = nullptr);
+    explicit AlpacaWebSocket(WatchlistModel  *watchlist,
+                             TradeTickModel  *tapeTicks,
+                             QObject         *parent = nullptr);
 
     void setCredentials(const QString &key, const QString &secret);
     void connectToFeed();
@@ -44,7 +53,8 @@ private:
     void attemptReconnect();
 
     QWebSocket      m_socket;
-    WatchlistModel *m_watchlist;
+    WatchlistModel  *m_watchlist;
+    TradeTickModel  *m_tapeTicks;
     QTimer          m_reconnectTimer;
     QTimer          m_pingTimer;
 
@@ -53,6 +63,9 @@ private:
 
     bool m_authenticated = false;
     int  m_reconnectDelay = 3000;   // ms, doubles on each failure up to 30s
+
+    QHash<QString, QuoteSnapshot> m_quotes;
+    QHash<QString, QString>       m_lastSide;  // last known trade direction per symbol
 };
 
 #endif // ALPACAWEBSOCKET_H

@@ -6,13 +6,13 @@ import QtCharts
 ApplicationWindow {
     visible: true
     width: 1200
-    height: 750
+    height: 1200
     title: "S&P 500 Stock Viewer"
 
     minimumWidth: 1200
     maximumWidth: 1200
-    minimumHeight: 750
-    maximumHeight: 750
+    minimumHeight: 1200
+    maximumHeight: 1200
 
     // -- THEME ----------------------------------------------------------------
     readonly property color bg:        "#000000"
@@ -26,6 +26,8 @@ ApplicationWindow {
     readonly property color redCol:    "#ff4444"
     readonly property color greenCol:  "#00ff88"
     readonly property color orange:    "#ffaa00"
+    readonly property color seablue:   "#006994"
+    readonly property color white:     "#ffffff"
 
     color: bg
 
@@ -109,7 +111,7 @@ ApplicationWindow {
 
             Text {
                 text: "Detected: " + alertPopup.alertTime
-                color: "#444"; font.pixelSize: 10
+                color: seablue; font.pixelSize: 10
             }
         }
     }
@@ -204,7 +206,7 @@ ApplicationWindow {
                         Text {
                             anchors.centerIn: parent
                             text: "CLEAR"
-                            color: dbClearArea.containsMouse ? redCol : "#444"
+                            color: dbClearArea.containsMouse ? redCol : seablue
                             font.pixelSize: 9
                             font.letterSpacing: 1
                             font.family: "Courier New"
@@ -296,7 +298,7 @@ ApplicationWindow {
                                isWarn   ? orange    :
                                isSignal ? greenCol  :
                                isFetch  ? cyanDim   :
-                               isQml    ? cyan       : "#555"
+                               isQml    ? cyan       : white
                         font.pixelSize: 11
                         font.family: "Courier New"
                         wrapMode: Text.WrapAnywhere
@@ -307,7 +309,7 @@ ApplicationWindow {
                     anchors.centerIn: parent
                     visible: logger.entries.length === 0
                     text: "No log entries yet"
-                    color: "#222"
+                    color: seablue
                     font.pixelSize: 12
                     font.family: "Courier New"
                 }
@@ -501,10 +503,10 @@ ApplicationWindow {
                 Row {
                     anchors.verticalCenter: parent.verticalCenter
                     leftPadding: 14; spacing: 0
-                    Text { text: "SYMBOL"; color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 80 }
-                    Text { text: "NAME";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 180 }
-                    Text { text: "PRICE";  color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 80 }
-                    Text { text: "CHG%";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 70 }
+                    Text { text: "SYMBOL"; color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 80 }
+                    Text { text: "NAME";   color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 180 }
+                    Text { text: "PRICE";  color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 80 }
+                    Text { text: "CHG%";   color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 70 }
                 }
             }
 
@@ -546,6 +548,7 @@ ApplicationWindow {
                             watchlistView.selectedSymbol = symbol
                             historyModel.setSymbol(symbol)
                             stockFetcher.fetchHistory(symbol)
+                            tradeTickModel.symbol = symbol
                         }
                     }
 
@@ -607,7 +610,7 @@ ApplicationWindow {
 
                         Text {
                             text: price > 0 ? price.toFixed(2) : "—"
-                            color: price > 0 ? cyan : "#444"
+                            color: price > 0 ? cyan : seablue
                             font.pixelSize: 13
                             font.bold: true
                             width: 80
@@ -616,7 +619,7 @@ ApplicationWindow {
                         Text {
                             readonly property double pct: changePct
                             text: price > 0 ? (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%" : "—"
-                            color: pct > 0 ? greenCol : (pct < 0 ? redCol : "#444")
+                            color: pct > 0 ? greenCol : (pct < 0 ? redCol : seablue)
                             font.pixelSize: 12
                             width: 70
                         }
@@ -639,7 +642,7 @@ ApplicationWindow {
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "and add them to your watchlist"
-                        color: "#444"; font.pixelSize: 12
+                        color: seablue; font.pixelSize: 12
                     }
                 }
             }
@@ -715,7 +718,275 @@ ApplicationWindow {
                 }
             }
 
-            // ── Positions panel ──────────────────────────────────────────────
+            // -- Trade Tape ----------------------------------------------------
+            Rectangle {
+                id: orderBookPanel
+                Layout.fillWidth: true
+                Layout.preferredHeight: 230
+                color: panel
+                border.color: borderCol
+                border.width: 1
+                visible: watchlistView.selectedSymbol !== ""
+
+                // Last traded price from watchlist (updated on every trade tick via REST + WS)
+                property double lastPrice: {
+                    var sym = watchlistView.selectedSymbol
+                    for (var i = 0; i < watchlist.count; i++) {
+                        var idx = watchlist.index(i, 0)
+                        if (watchlist.data(idx, 257) === sym) {
+                            var p = watchlist.data(idx, 259)  // PriceRole = Qt::UserRole+3
+                            return (p > 0) ? p : 0.0
+                        }
+                    }
+                    return 0.0
+                }
+
+                property double lastChangePct: {
+                    var sym = watchlistView.selectedSymbol
+                    for (var i = 0; i < watchlist.count; i++) {
+                        var idx = watchlist.index(i, 0)
+                        if (watchlist.data(idx, 257) === sym)
+                            return watchlist.data(idx, 261) || 0.0  // ChangePctRole = Qt::UserRole+5
+                    }
+                    return 0.0
+                }
+
+                // Timestamp of last quote arrival — used to detect staleness
+                property var lastQuoteTime: null
+
+                Connections {
+                    target: tradeTickModel
+                    function onSpreadChanged() {
+                        if (tradeTickModel.bid > 0 || tradeTickModel.ask > 0)
+                            orderBookPanel.lastQuoteTime = new Date()
+                    }
+                }
+
+                // Quote is considered stale after 60 seconds without an update
+                property bool quoteStale: {
+                    if (tradeTickModel.bid <= 0 && tradeTickModel.ask <= 0) return true
+                    if (lastQuoteTime === null) return true
+                    var age = (new Date() - lastQuoteTime) / 1000
+                    return age > 60
+                }
+
+                // Pulse the staleness check every 15s
+                Timer {
+                    interval: 15000; repeat: true; running: orderBookPanel.visible
+                    onTriggered: orderBookPanel.quoteStaleChanged()
+                }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    spacing: 0
+
+                    // -- Header bar ---------------------------------------------
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 34
+                        color: panelAlt
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 14
+                            anchors.rightMargin: 14
+
+                            Text {
+                                text: watchlistView.selectedSymbol + "  TAPE"
+                                color: cyan
+                                font.pixelSize: 11
+                                font.letterSpacing: 2
+                                font.bold: true
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            // Spread badge — only shown when quote is fresh
+                            Rectangle {
+                                visible: !orderBookPanel.quoteStale &&
+                                         tradeTickModel.bid > 0 && tradeTickModel.ask > 0
+                                width: spreadLabel.implicitWidth + 14
+                                height: 20; radius: 3
+                                color: cyanFade
+
+                                Text {
+                                    id: spreadLabel
+                                    anchors.centerIn: parent
+                                    text: "SPREAD  $" + tradeTickModel.spread.toFixed(3) +
+                                          "  (" + tradeTickModel.spreadPct.toFixed(3) + "%)"
+                                    color: cyanDim
+                                    font.pixelSize: 10
+                                    font.letterSpacing: 1
+                                }
+                            }
+                        }
+                    }
+
+                    // -- Compact price row --------------------------------------
+                    Rectangle {
+                        Layout.fillWidth: true
+                        height: 42
+                        color: "#070707"
+
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 16
+                            anchors.rightMargin: 16
+                            spacing: 20
+
+                            // Last traded price
+                            ColumnLayout {
+                                spacing: 1
+                                Text {
+                                    text: "LAST TRADE"
+                                    color: seablue; font.pixelSize: 9; font.letterSpacing: 2
+                                }
+                                Text {
+                                    text: orderBookPanel.lastPrice > 0
+                                          ? "$" + orderBookPanel.lastPrice.toFixed(2) : "—"
+                                    color: cyan; font.pixelSize: 15; font.bold: true
+                                }
+                            }
+
+                            // Change %
+                            ColumnLayout {
+                                spacing: 1
+                                visible: orderBookPanel.lastPrice > 0
+                                Text {
+                                    text: "CHG"
+                                    color: seablue; font.pixelSize: 9; font.letterSpacing: 2
+                                }
+                                Text {
+                                    readonly property double pct: orderBookPanel.lastChangePct
+                                    text: (pct >= 0 ? "+" : "") + pct.toFixed(2) + "%"
+                                    color: pct > 0 ? greenCol : pct < 0 ? redCol : seablue
+                                    font.pixelSize: 13; font.bold: true
+                                }
+                            }
+
+                            Item { Layout.fillWidth: true }
+
+                            // Bid — dimmed when stale
+                            ColumnLayout {
+                                spacing: 1
+                                visible: tradeTickModel.bid > 0
+                                opacity: orderBookPanel.quoteStale ? 0.35 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 400 } }
+
+                                Text {
+                                    text: orderBookPanel.quoteStale ? "BID  (stale)" : "BID"
+                                    color: seablue; font.pixelSize: 9; font.letterSpacing: 2
+                                }
+                                Text {
+                                    text: "$" + tradeTickModel.bid.toFixed(2)
+                                    color: greenCol; font.pixelSize: 13; font.bold: true
+                                }
+                            }
+
+                            // Ask — dimmed when stale
+                            ColumnLayout {
+                                spacing: 1
+                                visible: tradeTickModel.ask > 0
+                                opacity: orderBookPanel.quoteStale ? 0.35 : 1.0
+                                Behavior on opacity { NumberAnimation { duration: 400 } }
+
+                                Text {
+                                    text: orderBookPanel.quoteStale ? "ASK  (stale)" : "ASK"
+                                    color: seablue; font.pixelSize: 9; font.letterSpacing: 2
+                                }
+                                Text {
+                                    text: "$" + tradeTickModel.ask.toFixed(2)
+                                    color: redCol; font.pixelSize: 13; font.bold: true
+                                }
+                            }
+                        }
+                    }
+
+                    // -- Tape column headers ------------------------------------
+                    Rectangle {
+                        Layout.fillWidth: true; height: 22
+                        color: "#050505"
+
+                        Row {
+                            anchors.verticalCenter: parent.verticalCenter
+                            leftPadding: 12; spacing: 0
+                            Text { text: "TIME";  color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 72 }
+                            Text { text: "PRICE"; color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 90 }
+                            Text { text: "SIZE";  color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 80 }
+                            Text { text: "SIDE";  color: seablue; font.pixelSize: 10; font.letterSpacing: 2 }
+                        }
+                    }
+
+                    // -- Trade tape ---------------------------------------------
+                    ListView {
+                        id: tapeView
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        model: tradeTickModel
+                        clip: true
+
+                        add: Transition {
+                            NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 150 }
+                        }
+
+                        delegate: Rectangle {
+                            width: tapeView.width; height: 26
+                            color: index % 2 === 0 ? panel : bg
+
+                            readonly property bool isBuy:  tickSide === "buy"
+                            readonly property bool isSell: tickSide === "sell"
+
+                            // Left accent
+                            Rectangle {
+                                width: 2; height: parent.height
+                                color: isBuy ? greenCol : isSell ? redCol : seablue
+                            }
+
+                            Row {
+                                anchors.verticalCenter: parent.verticalCenter
+                                leftPadding: 12; spacing: 0
+
+                                Text {
+                                    text: tickTime
+                                    color: seablue; font.pixelSize: 11
+                                    font.family: "Courier New"; width: 72
+                                }
+                                Text {
+                                    text: "$" + tickPrice.toFixed(2)
+                                    color: isBuy ? greenCol : isSell ? redCol : cyanDim
+                                    font.pixelSize: 12; font.bold: true; width: 90
+                                }
+                                Text {
+                                    text: tickSize.toLocaleString()
+                                    color: "#666"; font.pixelSize: 11; width: 80
+                                }
+                                Rectangle {
+                                    width: 36; height: 16; radius: 2
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    visible: tickSide !== ""
+                                    color: isBuy ? "#002211" : "#220011"
+
+                                    Text {
+                                        anchors.centerIn: parent
+                                        text: isBuy ? "BUY" : "SELL"
+                                        color: isBuy ? greenCol : redCol
+                                        font.pixelSize: 9; font.bold: true; font.letterSpacing: 1
+                                    }
+                                }
+                            }
+                        }
+
+                        Text {
+                            anchors.centerIn: parent
+                            visible: tradeTickModel.count === 0
+                            text: "Waiting for trades…"
+                            color: seablue; font.pixelSize: 11
+                        }
+                    }
+                }
+            }
+
+            // -- Positions panel ----------------------------------------------
                        Rectangle {
                            Layout.fillWidth: true
                            Layout.preferredHeight: 220
@@ -817,12 +1088,12 @@ ApplicationWindow {
                                    Row {
                                        anchors.verticalCenter: parent.verticalCenter
                                        leftPadding: 12; spacing: 0
-                                       Text { text: "SYM";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 60 }
-                                       Text { text: "QTY";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 50 }
-                                       Text { text: "ENTRY"; color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 68 }
-                                       Text { text: "PRICE"; color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 68 }
-                                       Text { text: "P&L";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 80 }
-                                       Text { text: "%";     color: "#444"; font.pixelSize: 10; font.letterSpacing: 2 }
+                                       Text { text: "SYM";   color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 60 }
+                                       Text { text: "QTY";   color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 50 }
+                                       Text { text: "ENTRY"; color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 68 }
+                                       Text { text: "PRICE"; color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 68 }
+                                       Text { text: "P&L";   color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 80 }
+                                       Text { text: "%";     color: seablue; font.pixelSize: 10; font.letterSpacing: 2 }
                                    }
                                }
 
@@ -947,7 +1218,7 @@ ApplicationWindow {
                                        Text {
                                            anchors.horizontalCenter: parent.horizontalCenter
                                            text: positionModel.providerName
-                                           color: "#222"; font.pixelSize: 10
+                                           color: seablue; font.pixelSize: 10
                                            font.letterSpacing: 1
                                        }
                                    }
@@ -996,7 +1267,7 @@ ApplicationWindow {
                             anchors.leftMargin: 8; anchors.rightMargin: 8
                             spacing: 6
 
-                            Text { text: "⌕"; color: "#444"; font.pixelSize: 14 }
+                            Text { text: "⌕"; color: seablue; font.pixelSize: 14 }
 
                             TextInput {
                                 id: searchField
@@ -1015,7 +1286,7 @@ ApplicationWindow {
                             }
 
                             Text {
-                                text: "×"; color: "#444"; font.pixelSize: 14
+                                text: "×"; color: seablue; font.pixelSize: 14
                                 visible: searchField.text.length > 0
                                 MouseArea {
                                     anchors.fill: parent
@@ -1036,8 +1307,8 @@ ApplicationWindow {
                 Row {
                     anchors.verticalCenter: parent.verticalCenter
                     leftPadding: 14; spacing: 0
-                    Text { text: "SYMBOL"; color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 90 }
-                    Text { text: "NAME";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2 }
+                    Text { text: "SYMBOL"; color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 90 }
+                    Text { text: "NAME";   color: seablue; font.pixelSize: 10; font.letterSpacing: 2 }
                 }
             }
 
@@ -1067,7 +1338,7 @@ ApplicationWindow {
                         }
                         Text {
                             text: name
-                            color: inWatch ? "#444" : cyanDim
+                            color: inWatch ? seablue : cyanDim
                             font.pixelSize: 12
                             Layout.fillWidth: true; elide: Text.ElideRight
                         }
@@ -1081,7 +1352,7 @@ ApplicationWindow {
                             Text {
                                 anchors.centerIn: parent
                                 text: inWatch ? "✓" : "+ ADD"
-                                color: inWatch ? "#444" : (addArea.containsMouse ? bg : cyanDim)
+                                color: inWatch ? seablue : (addArea.containsMouse ? bg : cyanDim)
                                 font.pixelSize: 10; font.letterSpacing: 1; font.bold: true
                             }
 
@@ -1134,7 +1405,7 @@ ApplicationWindow {
 
                     Text {
                         text: alertModel.count + " alerts"
-                        color: "#444"; font.pixelSize: 10; font.letterSpacing: 1
+                        color: seablue; font.pixelSize: 10; font.letterSpacing: 1
                     }
 
                     // TEST button
@@ -1146,7 +1417,7 @@ ApplicationWindow {
 
                         Text {
                             anchors.centerIn: parent; text: "TEST"
-                            color: testArea.containsMouse ? greenCol : "#444"
+                            color: testArea.containsMouse ? greenCol : seablue
                             font.pixelSize: 9; font.letterSpacing: 1
                         }
                         MouseArea {
@@ -1168,7 +1439,7 @@ ApplicationWindow {
 
                         Text {
                             anchors.centerIn: parent; text: "CLEAR"
-                            color: clearArea.containsMouse ? redCol : "#444"
+                            color: clearArea.containsMouse ? redCol : seablue
                             font.pixelSize: 9; font.letterSpacing: 1
                         }
                         MouseArea {
@@ -1188,11 +1459,11 @@ ApplicationWindow {
                 Row {
                     anchors.verticalCenter: parent.verticalCenter
                     leftPadding: 10; spacing: 0
-                    Text { text: "";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 22 }
-                    Text { text: "SYM";    color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 60 }
-                    Text { text: "SIGNAL"; color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 160 }
-                    Text { text: "VALUE";  color: "#444"; font.pixelSize: 10; font.letterSpacing: 2; width: 70 }
-                    Text { text: "TIME";   color: "#444"; font.pixelSize: 10; font.letterSpacing: 2 }
+                    Text { text: "";   color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 22 }
+                    Text { text: "SYM";    color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 60 }
+                    Text { text: "SIGNAL"; color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 160 }
+                    Text { text: "VALUE";  color: seablue; font.pixelSize: 10; font.letterSpacing: 2; width: 70 }
+                    Text { text: "TIME";   color: seablue; font.pixelSize: 10; font.letterSpacing: 2 }
                 }
             }
 
@@ -1246,7 +1517,7 @@ ApplicationWindow {
                             height: 34; verticalAlignment: Text.AlignVCenter
                         }
                         Text {
-                            text: signalTime; color: "#444"
+                            text: signalTime; color: seablue
                             font.pixelSize: 10
                             height: 34; verticalAlignment: Text.AlignVCenter
                         }

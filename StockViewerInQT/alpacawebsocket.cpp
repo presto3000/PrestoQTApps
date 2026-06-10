@@ -8,9 +8,10 @@
 // Alpaca free tier uses iex feed; paid uses sip
 static constexpr char WS_URL[] = "wss://stream.data.alpaca.markets/v2/iex";
 
-AlpacaWebSocket::AlpacaWebSocket(WatchlistModel *watchlist, QObject *parent)
+AlpacaWebSocket::AlpacaWebSocket(WatchlistModel *watchlist, TradeTickModel  *tapeTicks, QObject *parent)
     : QObject(parent),
-    m_watchlist(watchlist)
+    m_watchlist(watchlist),
+    m_tapeTicks(tapeTicks)
 {
     connect(&m_socket, &QWebSocket::connected,
             this,      &AlpacaWebSocket::onConnected);
@@ -140,34 +141,74 @@ void AlpacaWebSocket::onMessageReceived(const QString &msg)
 
 void AlpacaWebSocket::handleTrade(const QJsonObject &obj)
 {
-    // Trade message: { T:"t", S:"AAPL", p:182.5, s:100, t:"2024-..." }
     const QString symbol = obj["S"].toString();
     const double  price  = obj["p"].toDouble();
+    const int     size   = obj["s"].toInt();
 
     if (symbol.isEmpty() || price <= 0.0)
         return;
 
-    qDebug() << "[AlpacaWS] Trade" << symbol << price;
+    // Use exchange timestamp when available; fall back to wall clock
+    QDateTime timestamp = QDateTime::fromString(obj["t"].toString(), Qt::ISODateWithMs);
+    if (!timestamp.isValid())
+        timestamp = QDateTime::currentDateTime();
+
+    const QuoteSnapshot snap = m_quotes.value(symbol);
+
+    QString side;
+    if (snap.bid > 0.0 && snap.ask > 0.0) {
+        const double mid = (snap.bid + snap.ask) / 2.0;
+        if (price > mid)
+            side = "buy";
+        else if (price < mid)
+            side = "sell";
+        else
+            side = m_lastSide.value(symbol, "buy");  // carry previous direction at exact mid
+    } else if (snap.ask > 0.0 && price >= snap.ask) {
+        side = "buy";
+    } else if (snap.bid > 0.0 && price <= snap.bid) {
+        side = "sell";
+    } else {
+        side = m_lastSide.value(symbol, "");
+    }
+
+    if (!side.isEmpty())
+        m_lastSide[symbol] = side;
+
+    TradeTick tick;
+    tick.time   = timestamp;
+    tick.symbol = symbol;
+    tick.price  = price;
+    tick.size   = size;
+    tick.side   = side;
+
+    m_tapeTicks->addTick(tick);
+
+    // Update last price in watchlist
     m_watchlist->updatePrice(symbol, price, 0.0);
+
+    // qDebug() << "[AlpacaWS] Trade" << symbol << price;
 }
 
 void AlpacaWebSocket::handleQuote(const QJsonObject &obj)
 {
-    // Quote message: { T:"q", S:"AAPL", ap:182.6, bp:182.4, ... }
-    const QString symbol = obj["S"].toString();
-    // Use mid of ask/bid as price
-    const double ask = obj["ap"].toDouble();
-    const double bid = obj["bp"].toDouble();
+    const QString symbol  = obj["S"].toString();
+    const double  ask     = obj["ap"].toDouble();
+    const double  bid     = obj["bp"].toDouble();
+    const int     askSize = obj["as"].toInt();
+    const int     bidSize = obj["bs"].toInt();
 
     if (symbol.isEmpty() || (ask <= 0.0 && bid <= 0.0))
         return;
 
-    double mid = (ask > 0.0 && bid > 0.0)
-                     ? (ask + bid) / 2.0
-                     : qMax(ask, bid);
-    // TODO: CHANGE IT TO DISPLAY LEVEL 1 ORDER BOOK
-    // qDebug() << "[AlpacaWS] Quote" << symbol << mid;
-    // m_watchlist->updatePrice(symbol, mid, 0.0);
+    // Store authoritative snapshot for side detection in handleTrade
+    m_quotes[symbol] = { bid, ask, bidSize, askSize };
+
+    // Update watchlist (drives the per-row bid/ask columns)
+    m_watchlist->updateSpread(symbol, bid, bidSize, ask, askSize);
+
+    // Update TradeTickModel so the Level 1 panel reflects live bid/ask
+    m_tapeTicks->updateSpread(symbol, bid, bidSize, ask, askSize);
 }
 
 void AlpacaWebSocket::subscribeAll()

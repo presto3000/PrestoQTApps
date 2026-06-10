@@ -29,6 +29,10 @@ QVariant WatchlistModel::data(const QModelIndex &index, int role) const
         if (e.prevClose > 0.0)
             return ((e.price - e.prevClose) / e.prevClose) * 100.0;
         return 0.0;
+    case BidRole:     return e.bid;
+    case AskRole:     return e.ask;
+    case BidSizeRole: return e.bidSize;
+    case AskSizeRole: return e.askSize;
     }
     return {};
 }
@@ -40,7 +44,11 @@ QHash<int, QByteArray> WatchlistModel::roleNames() const
         { NameRole,      "name"      },
         { PriceRole,     "price"     },
         { ChangeRole,    "change"    },
-        { ChangePctRole, "changePct" }
+        { ChangePctRole, "changePct" },
+        { BidRole,       "bid"       },
+        { AskRole,       "ask"       },
+        { BidSizeRole,   "bidSize"   },
+        { AskSizeRole,   "askSize"   }
     };
 }
 
@@ -110,6 +118,57 @@ void WatchlistModel::updatePrice(const QString &symbol, double price, double pre
         }
     }
 }
+
+void WatchlistModel::updateSpread(const QString &symbol,
+                                  double bid, int bidSize,
+                                  double ask, int askSize)
+{
+    const QString upper = symbol.toUpper();
+    for (int i = 0; i < m_entries.size(); ++i) {
+        if (m_entries[i].symbol == upper) {
+            m_entries[i].bid     = bid;
+            m_entries[i].ask     = ask;
+            m_entries[i].bidSize = bidSize;
+            m_entries[i].askSize = askSize;
+            const QModelIndex idx = index(i);
+            emit dataChanged(idx, idx, { BidRole, AskRole, BidSizeRole, AskSizeRole });
+            return;
+        }
+    }
+}
+
+double WatchlistModel::bid(const QString &symbol) const
+{
+    const QString upper = symbol.toUpper();
+    for (const auto &e : m_entries)
+        if (e.symbol == upper) return e.bid;
+    return 0.0;
+}
+
+double WatchlistModel::ask(const QString &symbol) const
+{
+    const QString upper = symbol.toUpper();
+    for (const auto &e : m_entries)
+        if (e.symbol == upper) return e.ask;
+    return 0.0;
+}
+
+int WatchlistModel::bidSize(const QString &symbol) const
+{
+    const QString upper = symbol.toUpper();
+    for (const auto &e : m_entries)
+        if (e.symbol == upper) return e.bidSize;
+    return 0;
+}
+
+int WatchlistModel::askSize(const QString &symbol) const
+{
+    const QString upper = symbol.toUpper();
+    for (const auto &e : m_entries)
+        if (e.symbol == upper) return e.askSize;
+    return 0;
+}
+
 
 void WatchlistModel::saveWatchlist()
 {
