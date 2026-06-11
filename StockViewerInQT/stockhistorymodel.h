@@ -14,7 +14,8 @@ public:
         TimeRole = Qt::UserRole + 1,
         PriceRole,
         Sma20Role,
-        Sma50Role
+        Sma50Role,
+        VolumeRole
     };
 
     explicit StockHistoryModel(StockHistoryStore *store, QObject *parent = nullptr);
@@ -29,6 +30,8 @@ public:
 
     Q_INVOKABLE double sma20At(int index) const;
     Q_INVOKABLE double sma50At(int index) const;
+
+    Q_INVOKABLE double volumeAt(int index) const;
 
 signals:
     void symbolChanged();

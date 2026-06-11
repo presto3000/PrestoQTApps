@@ -79,6 +79,7 @@ QVector<PricePoint> StooqProvider::parseHistory(const QByteArray &data) const
 
         QDateTime time = QDateTime::fromString(parts[0], "yyyy-MM-dd");
         double close = parts[4].toDouble();
+        double volume = parts[5].toDouble();
 
         out.push_back({ time, close });
     }
@@ -197,6 +198,10 @@ QVector<PricePoint> YahooProvider::parseHistory(const QByteArray &data) const
         p.time = QDateTime::fromSecsSinceEpoch(timestamps[i].toInteger());
         p.price = close[i].toDouble();
 
+        // Volume
+        QJsonArray volArray = indicators.value("volume").toArray();
+        p.volume = (i < volArray.size()) ? volArray[i].toDouble() : 0.0;
+
         result.append(p);
     }
 
@@ -259,6 +264,7 @@ QVector<PricePoint> AlpacaProvider::parseHistory(const QByteArray &data) const
         PricePoint  p;
         p.time  = QDateTime::fromString(bar["t"].toString(), Qt::ISODate);
         p.price = bar["c"].toDouble();   // close price
+        p.volume = bar["v"].toDouble();   // Alpaca volume field
         if (p.price > 0.0)
             result.append(p);
     }
@@ -375,6 +381,11 @@ QVector<PricePoint> FinnhubProvider::parseHistory(const QByteArray &data) const
         PricePoint p;
         p.time  = QDateTime::fromSecsSinceEpoch(timestamps[i].toInteger());
         p.price = close[i].toDouble();
+
+        // Volume
+        QJsonArray volArray = indicators.value("volume").toArray();
+        p.volume = (i < volArray.size()) ? volArray[i].toDouble() : 0.0;
+
         result.append(p);
     }
 

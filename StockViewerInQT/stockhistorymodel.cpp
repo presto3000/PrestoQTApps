@@ -25,6 +25,7 @@ QVariant StockHistoryModel::data(const QModelIndex &index, int role) const
     case PriceRole: return p.price;
     case Sma20Role: return sma20At(index.row());
     case Sma50Role: return sma50At(index.row());
+    case VolumeRole: return volumeAt(index.row());
     }
 
     return {};
@@ -36,7 +37,8 @@ QHash<int, QByteArray> StockHistoryModel::roleNames() const
         { TimeRole, "time" },
         { PriceRole, "price" },
         { Sma20Role, "sma20" },
-        { Sma50Role, "sma50" }
+        { Sma50Role, "sma50" },
+        { VolumeRole, "volume" }
     };
 }
 
@@ -65,6 +67,13 @@ double StockHistoryModel::priceAt(int index) const
         return 0.0;
 
     return m_points[index].price;
+}
+
+double StockHistoryModel::volumeAt(int index) const
+{
+    if (index < 0 || index >= m_points.size())
+        return 0.0;
+    return m_points[index].volume;
 }
 
 void StockHistoryModel::onHistoryUpdated(const QString &symbol)

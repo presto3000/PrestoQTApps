@@ -9,6 +9,7 @@
 struct PricePoint {
     QDateTime time;
     double price;
+    double volume = 0.0;
 };
 
 class StockHistoryStore : public QObject

@@ -660,15 +660,15 @@ ApplicationWindow {
             // -- Chart --------------------------------------------------------
             Rectangle {
                 Layout.fillWidth: true
-                Layout.preferredHeight: 200
+                Layout.preferredHeight: 340   // taller for volume
                 color: panel
-                border.color: borderCol
-                border.width: 1
+                border.color: "transparent"
+                // border.width: 1
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 4
-                    spacing: 0
+                    anchors.margins: 8
+                    spacing: 6
 
                     RowLayout {
                         Layout.fillWidth: true
@@ -693,87 +693,158 @@ ApplicationWindow {
                         Layout.fillWidth: true
                         Layout.fillHeight: true
                         antialiasing: true
-                        theme: ChartView.ChartThemeBlueCerulean
+
                         backgroundColor: "transparent"
-                        plotAreaColor: "transparent"
+                        plotAreaColor: "#0f1419"
                         legend.visible: false
-                        margins.top: 4; margins.bottom: 4
-                        margins.left: 4; margins.right: 4
 
-                        ValueAxis { id: xAxis; labelsVisible: false; gridVisible: false; lineVisible: false; color: "transparent" }
-                        ValueAxis { id: yAxis; labelsColor: cyan; gridLineColor: "#1a1a1a"; labelFormat: "%.0f" }
+                        margins { top: 10; bottom: 10; left: 10; right: 10 }
 
+                        // -----------------------------
+                        // X AXIS (hidden like before)
+                        // -----------------------------
+
+                        ValueAxis {
+                            id: xAxis
+                            labelsVisible: false
+                            gridLineColor: "#1b2630"
+                            lineVisible: false
+                        }
+
+                        // -----------------------------
+                        // PRICE AXIS (ONLY VISIBLE AXIS)
+                        // -----------------------------
+
+                        ValueAxis {
+                            id: priceAxis
+
+                            labelsVisible: true
+                            labelsColor: cyanDim
+                            labelFormat: "$%.2f"
+
+                            gridLineColor: "#1a1230"
+                            minorGridLineColor: "#120c22"
+
+                            tickCount: 6
+                        }
+
+                        // -----------------------------
+                        // HIDDEN VOLUME AXIS
+                        // -----------------------------
+
+                        ValueAxis {
+                            id: volumeAxis
+                            labelsVisible: false
+                            lineVisible: false
+                            gridLineColor: "transparent"
+                        }
+
+                        // -----------------------------
+                        // PRICE SERIES
+                        // -----------------------------
+
+                        LineSeries {
+                            id: priceGlow
+                            axisX: xAxis
+                            axisY: priceAxis
+                            color: "#00e5ff33"
+                            width: 6
+                        }
 
                         LineSeries {
                             id: priceSeries
                             axisX: xAxis
-                            axisY: yAxis
-                            color: cyan
-                            width: 1.8
+                            axisY: priceAxis
+                            color: "#00e5ff"
+                            width: 2.2
                         }
 
                         LineSeries {
                             id: sma20Series
                             axisX: xAxis
-                            axisY: yAxis
-                            color: "#ffaa00"   // orange
-                            width: 1.6
-                            style: Qt.DashLine
+                            axisY: priceAxis
+                            color: "#f59e0b"
+                            width: 1.5
                         }
 
                         LineSeries {
                             id: sma50Series
                             axisX: xAxis
-                            axisY: yAxis
-                            color: "#cc66ff"   // purple
-                            width: 1.6
-                            style: Qt.DashLine
+                            axisY: priceAxis
+                            color: "#8b5cf6"
+                            width: 1.5
                         }
+
+                        // -----------------------------
+                        // VOLUME (BELOW PRICE, NO VISUAL AXIS)
+                        // -----------------------------
+
+                        BarSeries {
+                            axisX: xAxis
+                            axisY: volumeAxis   // hidden axis
+
+                            barWidth: 0.6
+
+                            BarSet {
+                                id: volumeSet
+                                color: "#2dd4bf55"
+                                borderColor: "transparent"
+                            }
+                        }
+
+                        // -----------------------------
+                        // DATA
+                        // -----------------------------
 
                         function rebuildChart() {
                             priceSeries.clear()
-                                sma20Series.clear()
-                                sma50Series.clear()
+                            priceGlow.clear()
+                            sma20Series.clear()
+                            sma50Series.clear()
+                            volumeSet.remove(0, volumeSet.count)
 
-                                const count = historyModel.rowCount()
-                                if (count === 0) return
+                            const count = historyModel.rowCount()
+                            if (count === 0) return
 
-                                let minY = 999999, maxY = -999999
+                            let minPrice = Infinity
+                            let maxPrice = -Infinity
+                            let maxVol = 0
 
-                                for (let i = 0; i < count; i++) {
-                                    const price = historyModel.priceAt(i)
-                                    priceSeries.append(i, price)
+                            for (let i = 0; i < count; i++) {
+                                const price = historyModel.priceAt(i)
+                                const sma20 = historyModel.sma20At(i)
+                                const sma50 = historyModel.sma50At(i)
+                                const vol = historyModel.volumeAt(i)
 
-                                    const sma20 = historyModel.sma20At(i)
-                                    if (!isNaN(sma20))
-                                        sma20Series.append(i, sma20)
+                                priceSeries.append(i, price)
+                                priceGlow.append(i, price)
 
-                                    const sma50 = historyModel.sma50At(i)
-                                    if (!isNaN(sma50))
-                                        sma50Series.append(i, sma50)
+                                if (!isNaN(sma20)) sma20Series.append(i, sma20)
+                                if (!isNaN(sma50)) sma50Series.append(i, sma50)
 
-                                    if (price < minY) minY = price
-                                    if (price > maxY) maxY = price
-                                }
+                                volumeSet.append(vol)
 
-                                xAxis.min = 0
-                                xAxis.max = Math.max(1, count - 1)
-                                yAxis.min = minY * 0.985
-                                yAxis.max = maxY * 1.015
+                                minPrice = Math.min(minPrice, price)
+                                maxPrice = Math.max(maxPrice, price)
+                                maxVol = Math.max(maxVol, vol)
+                            }
+
+                            // -- PRICE AXIS
+                            xAxis.min = 0
+                            xAxis.max = Math.max(1, count - 1)
+
+                            priceAxis.min = minPrice * 0.97
+                            priceAxis.max = maxPrice * 1.03
+
+                            // -- VOLUME AXIS (hidden but real scaling)
+                            volumeAxis.min = 0
+                            volumeAxis.max = maxVol * 1.2
                         }
-
 
                         Connections {
                             target: historyModel
-                            function onModelReset()    { Qt.callLater(chart.rebuildChart) }
+                            function onModelReset() { Qt.callLater(chart.rebuildChart) }
                             function onSymbolChanged() { Qt.callLater(chart.rebuildChart) }
-                        }
-
-                        Text {
-                            anchors.centerIn: parent
-                            visible: historyModel.rowCount() === 0 && watchlistModelView.selectedSymbol === ""
-                            text: "Click a stock to see its chart"
-                            color: "#2a2a2a"; font.pixelSize: 12
                         }
                     }
                 }
